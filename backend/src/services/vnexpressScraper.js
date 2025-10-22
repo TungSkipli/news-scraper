@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 const { db } = require('../config/firebase');
 
-const TIMEOUT = 60000;
+const TIMEOUT = 10000;
 const MAX_RETRIES = 3;
 
 const scrapeArticleWithRetry = async (url, retryCount = 0) => {
@@ -98,8 +98,34 @@ const scrapeArticleWithRetry = async (url, retryCount = 0) => {
       };
 
       const getTags = () => {
-        const tagElements = document.querySelectorAll('.tags a');
-        return Array.from(tagElements).map(tag => tag.textContent.trim());
+        const selectors = [
+          '.tags a',
+          '.tag-item a',
+          '.tag a',
+          'a[rel="tag"]',
+          '.tags-item a',
+          '.article-tags a'
+        ];
+        
+        let tagElements = [];
+        for (const selector of selectors) {
+          tagElements = document.querySelectorAll(selector);
+          if (tagElements.length > 0) break;
+        }
+        
+        const tags = Array.from(tagElements).map(tag => tag.textContent.trim());
+        
+        if (tags.length === 0) {
+          const metaKeywords = document.querySelector('meta[name="keywords"]');
+          if (metaKeywords) {
+            const keywords = metaKeywords.getAttribute('content');
+            if (keywords) {
+              return keywords.split(',').map(k => k.trim()).filter(k => k);
+            }
+          }
+        }
+        
+        return tags;
       };
 
       const getPublishedDate = () => {

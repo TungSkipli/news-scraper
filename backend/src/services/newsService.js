@@ -6,40 +6,73 @@ const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
 
     if (tag) {
       query = query.where('tags', 'array-contains', tag);
-    }
+      
+      const snapshot = await query.get();
+      let articles = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-    query = query.orderBy('published_at', 'desc');
+      articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
 
-    const snapshot = await query.get();
-    let articles = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    if (search) {
-      const searchLower = search.toLowerCase();
-      articles = articles.filter(article => 
-        article.title?.toLowerCase().includes(searchLower) ||
-        article.summary?.toLowerCase().includes(searchLower) ||
-        article.content?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    const total = articles.length;
-    const totalPages = Math.ceil(total / limit);
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedArticles = articles.slice(startIndex, endIndex);
-
-    return {
-      articles: paginatedArticles,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages
+      if (search) {
+        const searchLower = search.toLowerCase();
+        articles = articles.filter(article => 
+          article.title?.toLowerCase().includes(searchLower) ||
+          article.summary?.toLowerCase().includes(searchLower) ||
+          article.content?.toLowerCase().includes(searchLower)
+        );
       }
-    };
+
+      const total = articles.length;
+      const totalPages = Math.ceil(total / limit);
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedArticles = articles.slice(startIndex, endIndex);
+
+      return {
+        articles: paginatedArticles,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages
+        }
+      };
+    } else {
+      query = query.orderBy('published_at', 'desc');
+
+      const snapshot = await query.get();
+      let articles = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      if (search) {
+        const searchLower = search.toLowerCase();
+        articles = articles.filter(article => 
+          article.title?.toLowerCase().includes(searchLower) ||
+          article.summary?.toLowerCase().includes(searchLower) ||
+          article.content?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      const total = articles.length;
+      const totalPages = Math.ceil(total / limit);
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedArticles = articles.slice(startIndex, endIndex);
+
+      return {
+        articles: paginatedArticles,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages
+        }
+      };
+    }
   } catch (error) {
     console.error('Error fetching news:', error);
     throw error;
