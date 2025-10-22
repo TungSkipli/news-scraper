@@ -1,52 +1,45 @@
 const puppeteer = require('puppeteer');
 const { db } = require('../config/firebase');
+const {
+  SCRAPER_CONFIG,
+  BROWSER_CONFIG,
+  BLOCKED_RESOURCES,
+  BLOCKED_DOMAINS,
+  VNEXPRESS_CONFIG,
+  FIREBASE_COLLECTIONS
+} = require('../utils/constants');
 
-const TIMEOUT = 10000;
-const MAX_RETRIES = 3;
+const setupRequestInterception = (page) => {
+  page.on('request', (request) => {
+    const resourceType = request.resourceType();
+    const url = request.url();
+    
+    if (BLOCKED_RESOURCES.includes(resourceType) || 
+        BLOCKED_DOMAINS.some(domain => url.includes(domain))) {
+      request.abort();
+    } else {
+      request.continue();
+    }
+  });
+};
+
+const createBrowserPage = async (browser) => {
+  const page = await browser.newPage();
+  await page.setDefaultTimeout(SCRAPER_CONFIG.TIMEOUT);
+  await page.setRequestInterception(true);
+  setupRequestInterception(page);
+  return page;
+};
 
 const scrapeArticleWithRetry = async (url, retryCount = 0) => {
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
-      ],
-      protocolTimeout: 60000
-    });
-    
-    const page = await browser.newPage();
-    await page.setDefaultTimeout(TIMEOUT);
-    
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const resourceType = request.resourceType();
-      const url = request.url();
-      
-      if (resourceType === 'image' || 
-          resourceType === 'media' || 
-          resourceType === 'font' ||
-          resourceType === 'stylesheet' ||
-          url.includes('google-analytics') ||
-          url.includes('doubleclick') ||
-          url.includes('googlesyndication') ||
-          url.includes('facebook.net') ||
-          url.includes('adservice') ||
-          url.includes('ads') ||
-          url.includes('analytics')) {
-        request.abort();
-      } else {
-        request.continue();
-      }
-    });
+    browser = await puppeteer.launch(BROWSER_CONFIG);
+    const page = await createBrowserPage(browser);
     
     await page.goto(url, { 
       waitUntil: 'domcontentloaded', 
-      timeout: TIMEOUT 
+      timeout: SCRAPER_CONFIG.TIMEOUT 
     });
     
     const articleData = await page.evaluate(() => {
@@ -170,12 +163,12 @@ const scrapeArticleWithRetry = async (url, retryCount = 0) => {
       await browser.close().catch(() => {});
     }
     
-    if (retryCount < MAX_RETRIES) {
-      console.log(`Retry ${retryCount + 1}/${MAX_RETRIES} for ${url}`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    if (retryCount < SCRAPER_CONFIG.MAX_RETRIES) {
+      console.log(`Retry ${retryCount + 1}/${SCRAPER_CONFIG.MAX_RETRIES} for ${url}`);
+      await new Promise(resolve => setTimeout(resolve, SCRAPER_CONFIG.RETRY_DELAY));
       return await scrapeArticleWithRetry(url, retryCount + 1);
     }
-    console.error(`Failed to scrape ${url} after ${MAX_RETRIES} retries:`, error.message);
+    console.error(`Failed to scrape ${url} after ${SCRAPER_CONFIG.MAX_RETRIES} retries:`, error.message);
     return null;
   }
 };
@@ -193,81 +186,37 @@ const createSlug = (title) => {
 };
 
 const scrapeVnExpressTech = async (progressCallback) => {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox', 
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-gpu'
-    ],
-    protocolTimeout: 60000
-  });
-  
-  const page = await browser.newPage();
-  await page.setDefaultTimeout(TIMEOUT);
-  
-  await page.setRequestInterception(true);
-  page.on('request', (request) => {
-    const resourceType = request.resourceType();
-    const url = request.url();
-    
-    if (resourceType === 'image' || 
-        resourceType === 'media' || 
-        resourceType === 'font' ||
-        resourceType === 'stylesheet' ||
-        url.includes('google-analytics') ||
-        url.includes('doubleclick') ||
-        url.includes('googlesyndication') ||
-        url.includes('facebook.net') ||
-        url.includes('adservice') ||
-        url.includes('ads') ||
-        url.includes('analytics')) {
-      request.abort();
-    } else {
-      request.continue();
-    }
-  });
+  const browser = await puppeteer.launch(BROWSER_CONFIG);
+  const page = await createBrowserPage(browser);
   
   console.log('Navigating to VnExpress Tech page...');
   if (progressCallback) progressCallback({ stage: 'fetching', message: 'Loading article list...' });
   
-  await page.goto('https://vnexpress.net/khoa-hoc-cong-nghe', { 
+  await page.goto(VNEXPRESS_CONFIG.BASE_URL, { 
     waitUntil: 'domcontentloaded',
-    timeout: TIMEOUT 
+    timeout: SCRAPER_CONFIG.TIMEOUT 
   });
 
-  await page.evaluate(() => {
+  await page.evaluate((scrollDistance, scrollDelay) => {
     return new Promise((resolve) => {
       let totalHeight = 0;
-      const distance = 100;
       const timer = setInterval(() => {
         const scrollHeight = document.body.scrollHeight;
-        window.scrollBy(0, distance);
-        totalHeight += distance;
+        window.scrollBy(0, scrollDistance);
+        totalHeight += scrollDistance;
 
         if (totalHeight >= scrollHeight) {
           clearInterval(timer);
           resolve();
         }
-      }, 100);
+      }, scrollDelay);
     });
-  });
+  }, SCRAPER_CONFIG.SCROLL_DISTANCE, SCRAPER_CONFIG.SCROLL_DELAY);
 
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, SCRAPER_CONFIG.PAGE_LOAD_DELAY));
 
-  const articleLinks = await page.evaluate(() => {
+  const articleLinks = await page.evaluate((selectors) => {
     const links = new Set();
-    
-    const selectors = [
-      'article.item-news h3.title-news a',
-      'article.item-news h2.title-news a',
-      'article h3 a',
-      'article h2 a',
-      '.item-news .title-news a',
-      '.article-topstory .title-news a'
-    ];
     
     selectors.forEach(selector => {
       const elements = document.querySelectorAll(selector);
@@ -279,7 +228,7 @@ const scrapeVnExpressTech = async (progressCallback) => {
     });
     
     return Array.from(links);
-  });
+  }, VNEXPRESS_CONFIG.SELECTORS.ARTICLE_LINKS);
 
   await browser.close();
 
@@ -348,7 +297,10 @@ const scrapeVnExpressTech = async (progressCallback) => {
         state: 'global'
       };
 
-      await db.collection('news').doc('articles').collection('tech').add(newsData);
+      await db.collection(FIREBASE_COLLECTIONS.NEWS)
+        .doc(FIREBASE_COLLECTIONS.ARTICLES)
+        .collection(FIREBASE_COLLECTIONS.TECH)
+        .add(newsData);
       
       console.log(`✓ Saved: ${articleData.title}`);
       results.success++;

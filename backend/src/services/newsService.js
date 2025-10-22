@@ -1,8 +1,11 @@
 const { db } = require('../config/firebase');
+const { FIREBASE_COLLECTIONS } = require('../utils/constants');
 
 const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
   try {
-    let query = db.collection('news').doc('articles').collection('tech');
+    let query = db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.TECH);
 
     if (tag) {
       query = query.where('tags', 'array-contains', tag);
@@ -81,7 +84,11 @@ const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
 
 const getNewsById = async (id) => {
   try {
-    const doc = await db.collection('news').doc('articles').collection('tech').doc(id).get();
+    const doc = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.TECH)
+      .doc(id)
+      .get();
     
     if (!doc.exists) {
       return null;
@@ -99,7 +106,10 @@ const getNewsById = async (id) => {
 
 const getStats = async () => {
   try {
-    const snapshot = await db.collection('news').doc('articles').collection('tech').get();
+    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.TECH)
+      .get();
     const articles = snapshot.docs.map(doc => doc.data());
 
     const now = Date.now();
@@ -154,7 +164,10 @@ const getStats = async () => {
 
 const getAllTags = async () => {
   try {
-    const snapshot = await db.collection('news').doc('articles').collection('tech').get();
+    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.TECH)
+      .get();
     const articles = snapshot.docs.map(doc => doc.data());
 
     const tagsSet = new Set();
