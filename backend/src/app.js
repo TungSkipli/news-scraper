@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require("cors");
 const scrapeRoutes = require('./routes/scrapeRoutes');
+const newsRoutes = require('./routes/newsRoutes');
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/', scrapeRoutes);
+app.use('/', newsRoutes);
 
 
 app.use((req, res) => {

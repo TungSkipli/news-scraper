@@ -1,20 +1,53 @@
 const puppeteer = require('puppeteer');
 const { db } = require('../config/firebase');
 
-const TIMEOUT = 10000;
+const TIMEOUT = 60000;
 const MAX_RETRIES = 3;
 
 const scrapeArticleWithRetry = async (url, retryCount = 0) => {
+  let browser;
   try {
-    const browser = await puppeteer.launch({
+    browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu'
+      ],
+      protocolTimeout: 60000
     });
     
     const page = await browser.newPage();
     await page.setDefaultTimeout(TIMEOUT);
     
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: TIMEOUT });
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      const url = request.url();
+      
+      if (resourceType === 'image' || 
+          resourceType === 'media' || 
+          resourceType === 'font' ||
+          resourceType === 'stylesheet' ||
+          url.includes('google-analytics') ||
+          url.includes('doubleclick') ||
+          url.includes('googlesyndication') ||
+          url.includes('facebook.net') ||
+          url.includes('adservice') ||
+          url.includes('ads') ||
+          url.includes('analytics')) {
+        request.abort();
+      } else {
+        request.continue();
+      }
+    });
+    
+    await page.goto(url, { 
+      waitUntil: 'domcontentloaded', 
+      timeout: TIMEOUT 
+    });
     
     const articleData = await page.evaluate(() => {
       const getTextContent = (selector) => {
@@ -23,10 +56,33 @@ const scrapeArticleWithRetry = async (url, retryCount = 0) => {
       };
 
       const getImageData = () => {
-        const imgElement = document.querySelector('article img.lazy, article img');
-        const captionElement = document.querySelector('article .Image .desc, article .fig-picture .desc');
+        const selectors = [
+          'article .fig-picture img',
+          'article .Image img',
+          'article img[itemprop="contentUrl"]',
+          'article img.lazy',
+          'article img'
+        ];
+        
+        let imgElement = null;
+        for (const selector of selectors) {
+          imgElement = document.querySelector(selector);
+          if (imgElement) break;
+        }
+        
+        let imageUrl = '';
+        if (imgElement) {
+          imageUrl = imgElement.getAttribute('data-src') || 
+                     imgElement.getAttribute('data-original') ||
+                     imgElement.getAttribute('src') ||
+                     imgElement.getAttribute('data-lazy-src') ||
+                     '';
+        }
+        
+        const captionElement = document.querySelector('article .Image .desc, article .fig-picture .desc, article figcaption');
+        
         return {
-          url: imgElement ? (imgElement.src || imgElement.getAttribute('data-src') || '') : '',
+          url: imageUrl,
           caption: captionElement ? captionElement.textContent.trim() : ''
         };
       };
@@ -46,12 +102,28 @@ const scrapeArticleWithRetry = async (url, retryCount = 0) => {
         return Array.from(tagElements).map(tag => tag.textContent.trim());
       };
 
+      const getPublishedDate = () => {
+        const dateElement = document.querySelector('span.date, span.time');
+        if (dateElement) {
+          const dateText = dateElement.textContent.trim();
+          return dateText;
+        }
+        
+        const metaTime = document.querySelector('meta[property="article:published_time"]');
+        if (metaTime) {
+          return metaTime.getAttribute('content');
+        }
+        
+        return null;
+      };
+
       const title = getTextContent('h1.title-detail');
       const summary = getTextContent('p.description');
       const content = getContent();
       const authors = getAuthors();
       const image = getImageData();
       const tags = getTags();
+      const publishedDate = getPublishedDate();
 
       return {
         title,
@@ -59,7 +131,8 @@ const scrapeArticleWithRetry = async (url, retryCount = 0) => {
         content,
         authors,
         image,
-        tags
+        tags,
+        publishedDate
       };
     });
 
@@ -67,8 +140,13 @@ const scrapeArticleWithRetry = async (url, retryCount = 0) => {
     
     return articleData;
   } catch (error) {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+    
     if (retryCount < MAX_RETRIES) {
       console.log(`Retry ${retryCount + 1}/${MAX_RETRIES} for ${url}`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
       return await scrapeArticleWithRetry(url, retryCount + 1);
     }
     console.error(`Failed to scrape ${url} after ${MAX_RETRIES} retries:`, error.message);
@@ -91,32 +169,90 @@ const createSlug = (title) => {
 const scrapeVnExpressTech = async (progressCallback) => {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu'
+    ],
+    protocolTimeout: 60000
   });
   
   const page = await browser.newPage();
   await page.setDefaultTimeout(TIMEOUT);
   
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    const resourceType = request.resourceType();
+    const url = request.url();
+    
+    if (resourceType === 'image' || 
+        resourceType === 'media' || 
+        resourceType === 'font' ||
+        resourceType === 'stylesheet' ||
+        url.includes('google-analytics') ||
+        url.includes('doubleclick') ||
+        url.includes('googlesyndication') ||
+        url.includes('facebook.net') ||
+        url.includes('adservice') ||
+        url.includes('ads') ||
+        url.includes('analytics')) {
+      request.abort();
+    } else {
+      request.continue();
+    }
+  });
+  
   console.log('Navigating to VnExpress Tech page...');
-  if (progressCallback) progressCallback({ stage: 'fetching', message: 'Đang tải danh sách bài viết...' });
+  if (progressCallback) progressCallback({ stage: 'fetching', message: 'Loading article list...' });
   
   await page.goto('https://vnexpress.net/khoa-hoc-cong-nghe', { 
-    waitUntil: 'networkidle2',
+    waitUntil: 'domcontentloaded',
     timeout: TIMEOUT 
   });
 
+  await page.evaluate(() => {
+    return new Promise((resolve) => {
+      let totalHeight = 0;
+      const distance = 100;
+      const timer = setInterval(() => {
+        const scrollHeight = document.body.scrollHeight;
+        window.scrollBy(0, distance);
+        totalHeight += distance;
+
+        if (totalHeight >= scrollHeight) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  });
+
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   const articleLinks = await page.evaluate(() => {
-    const links = [];
-    const articles = document.querySelectorAll('article.item-news');
+    const links = new Set();
     
-    articles.forEach(article => {
-      const linkElement = article.querySelector('h3.title-news a, h2.title-news a');
-      if (linkElement && linkElement.href) {
-        links.push(linkElement.href);
-      }
+    const selectors = [
+      'article.item-news h3.title-news a',
+      'article.item-news h2.title-news a',
+      'article h3 a',
+      'article h2 a',
+      '.item-news .title-news a',
+      '.article-topstory .title-news a'
+    ];
+    
+    selectors.forEach(selector => {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach(el => {
+        if (el.href && el.href.includes('vnexpress.net') && !el.href.includes('#')) {
+          links.add(el.href);
+        }
+      });
     });
     
-    return links;
+    return Array.from(links);
   });
 
   await browser.close();
@@ -124,7 +260,7 @@ const scrapeVnExpressTech = async (progressCallback) => {
   console.log(`Found ${articleLinks.length} articles to scrape`);
   if (progressCallback) progressCallback({ 
     stage: 'scraping', 
-    message: `Tìm thấy ${articleLinks.length} bài viết`,
+    message: `Found ${articleLinks.length} articles`,
     total: articleLinks.length,
     current: 0
   });
@@ -142,7 +278,7 @@ const scrapeVnExpressTech = async (progressCallback) => {
     
     if (progressCallback) progressCallback({ 
       stage: 'scraping', 
-      message: `Đang scrape bài viết ${i + 1}/${articleLinks.length}`,
+      message: `Scraping article ${i + 1}/${articleLinks.length}`,
       total: articleLinks.length,
       current: i + 1,
       success: results.success,
@@ -160,6 +296,16 @@ const scrapeVnExpressTech = async (progressCallback) => {
 
     try {
       const slug = createSlug(articleData.title);
+      const scrapedAt = Date.now();
+      let publishedAt = scrapedAt;
+      
+      if (articleData.publishedDate) {
+        const parsedDate = new Date(articleData.publishedDate);
+        if (!isNaN(parsedDate.getTime())) {
+          publishedAt = parsedDate.getTime();
+        }
+      }
+      
       const newsData = {
         title: articleData.title,
         summary: articleData.summary,
@@ -169,7 +315,8 @@ const scrapeVnExpressTech = async (progressCallback) => {
         tags: articleData.tags || [],
         category_slug: 'tech',
         external_source: link,
-        created_at: Date.now(),
+        published_at: publishedAt,
+        scraped_at: scrapedAt,
         likes: 0,
         slug: slug,
         state: 'global'
@@ -187,7 +334,7 @@ const scrapeVnExpressTech = async (progressCallback) => {
 
   if (progressCallback) progressCallback({ 
     stage: 'complete', 
-    message: 'Hoàn thành scraping!',
+    message: 'Scraping completed!',
     total: articleLinks.length,
     current: articleLinks.length,
     success: results.success,

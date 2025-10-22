@@ -48,7 +48,7 @@ function Scraper() {
 
     eventSource.onerror = (err) => {
       console.error('SSE error:', err);
-      setError('Kết nối bị gián đoạn');
+      setError('Connection was interrupted');
       setLoading(false);
       eventSource.close();
     };
@@ -102,7 +102,7 @@ function Scraper() {
               <div style={{ marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <span style={{ fontWeight: '600', color: '#1e40af' }}>
-                    {progress?.message || 'Đang khởi động...'}
+                    {progress?.message || 'Starting...'}
                   </span>
                   {progress?.total > 0 && (
                     <span style={{ color: '#1e40af', fontSize: '0.875rem' }}>
@@ -144,9 +144,9 @@ function Scraper() {
                     marginTop: '0.75rem',
                     fontSize: '0.875rem'
                   }}>
-                    <span style={{ color: '#059669' }}>✓ Thành công: {progress?.success}</span>
-                    <span style={{ color: '#dc2626' }}>✗ Thất bại: {progress?.failed}</span>
-                    <span style={{ color: '#d97706' }}>⊘ Bỏ qua: {progress?.skipped}</span>
+                    <span style={{ color: '#059669' }}>✓ Success: {progress?.success}</span>
+                    <span style={{ color: '#dc2626' }}>✗ Failed: {progress?.failed}</span>
+                    <span style={{ color: '#d97706' }}>⊘ Skipped: {progress?.skipped}</span>
                   </div>
                 )}
               </div>
