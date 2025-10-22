@@ -26,7 +26,7 @@ function Scraper() {
       eventSourceRef.current.close();
     }
 
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.REACT_APP_API_URL;
     const eventSource = new EventSource(`${API_URL}/scrape-stream`);
     eventSourceRef.current = eventSource;
 

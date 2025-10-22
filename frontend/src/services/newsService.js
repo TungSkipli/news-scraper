@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL;
 
 export const getNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
   const response = await axios.get(`${API_URL}/news`, {

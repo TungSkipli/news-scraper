@@ -1,4 +1,3 @@
-import React from 'react';
 
 function NewsCard({ article, onClick }) {
   const formatDate = (timestamp) => {
