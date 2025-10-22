@@ -88,7 +88,7 @@ const createSlug = (title) => {
     .trim();
 };
 
-const scrapeVnExpressTech = async () => {
+const scrapeVnExpressTech = async (progressCallback) => {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -98,6 +98,8 @@ const scrapeVnExpressTech = async () => {
   await page.setDefaultTimeout(TIMEOUT);
   
   console.log('Navigating to VnExpress Tech page...');
+  if (progressCallback) progressCallback({ stage: 'fetching', message: 'Đang tải danh sách bài viết...' });
+  
   await page.goto('https://vnexpress.net/khoa-hoc-cong-nghe', { 
     waitUntil: 'networkidle2',
     timeout: TIMEOUT 
@@ -120,6 +122,12 @@ const scrapeVnExpressTech = async () => {
   await browser.close();
 
   console.log(`Found ${articleLinks.length} articles to scrape`);
+  if (progressCallback) progressCallback({ 
+    stage: 'scraping', 
+    message: `Tìm thấy ${articleLinks.length} bài viết`,
+    total: articleLinks.length,
+    current: 0
+  });
 
   const results = {
     total: articleLinks.length,
@@ -128,8 +136,19 @@ const scrapeVnExpressTech = async () => {
     skipped: 0
   };
 
-  for (const link of articleLinks) {
+  for (let i = 0; i < articleLinks.length; i++) {
+    const link = articleLinks[i];
     console.log(`Scraping: ${link}`);
+    
+    if (progressCallback) progressCallback({ 
+      stage: 'scraping', 
+      message: `Đang scrape bài viết ${i + 1}/${articleLinks.length}`,
+      total: articleLinks.length,
+      current: i + 1,
+      success: results.success,
+      failed: results.failed,
+      skipped: results.skipped
+    });
     
     const articleData = await scrapeArticleWithRetry(link);
     
@@ -165,6 +184,16 @@ const scrapeVnExpressTech = async () => {
       results.failed++;
     }
   }
+
+  if (progressCallback) progressCallback({ 
+    stage: 'complete', 
+    message: 'Hoàn thành scraping!',
+    total: articleLinks.length,
+    current: articleLinks.length,
+    success: results.success,
+    failed: results.failed,
+    skipped: results.skipped
+  });
 
   return results;
 };

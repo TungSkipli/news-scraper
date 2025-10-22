@@ -1,24 +1,57 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { scrapeNews } from '../services/scrapeService';
 
 function Scraper() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const eventSourceRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
 
   const handleScrape = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
+    setProgress(null);
 
-    try {
-      const data = await scrapeNews();
-      setResult(data);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to scrape');
-    } finally {
-      setLoading(false);
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
     }
+
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const eventSource = new EventSource(`${API_URL}/scrape-stream`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.stage === 'done') {
+        setResult({ success: true, data: data.results });
+        setLoading(false);
+        eventSource.close();
+      } else if (data.stage === 'error') {
+        setError(data.message);
+        setLoading(false);
+        eventSource.close();
+      } else {
+        setProgress(data);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('SSE error:', err);
+      setError('Kết nối bị gián đoạn');
+      setLoading(false);
+      eventSource.close();
+    };
   };
 
   return (
@@ -61,22 +94,61 @@ function Scraper() {
           {loading && (
             <div style={{ 
               marginTop: '1.5rem', 
-              padding: '1rem', 
+              padding: '1.5rem', 
               backgroundColor: '#dbeafe',
               border: '1px solid #93c5fd',
               borderRadius: '8px'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  border: '2px solid #2563eb',
-                  borderTopColor: 'transparent',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  marginRight: '0.75rem'
-                }}></div>
-                <p style={{ color: '#1e40af' }}>Scraping in progress... This may take a while.</p>
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: '600', color: '#1e40af' }}>
+                    {progress?.message || 'Đang khởi động...'}
+                  </span>
+                  {progress?.total > 0 && (
+                    <span style={{ color: '#1e40af', fontSize: '0.875rem' }}>
+                      {progress?.current}/{progress?.total}
+                    </span>
+                  )}
+                </div>
+                
+                {progress?.total > 0 && (
+                  <div style={{
+                    width: '100%',
+                    height: '24px',
+                    backgroundColor: '#eff6ff',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    border: '1px solid #93c5fd'
+                  }}>
+                    <div style={{
+                      width: `${(progress?.current / progress?.total) * 100}%`,
+                      height: '100%',
+                      backgroundColor: '#2563eb',
+                      transition: 'width 0.3s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                      fontWeight: '600'
+                    }}>
+                      {progress?.total > 0 && `${Math.round((progress?.current / progress?.total) * 100)}%`}
+                    </div>
+                  </div>
+                )}
+
+                {progress?.success !== undefined && (
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '1rem', 
+                    marginTop: '0.75rem',
+                    fontSize: '0.875rem'
+                  }}>
+                    <span style={{ color: '#059669' }}>✓ Thành công: {progress?.success}</span>
+                    <span style={{ color: '#dc2626' }}>✗ Thất bại: {progress?.failed}</span>
+                    <span style={{ color: '#d97706' }}>⊘ Bỏ qua: {progress?.skipped}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
