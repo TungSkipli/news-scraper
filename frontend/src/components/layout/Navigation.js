@@ -1,50 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { getAllSources } from '../../services/sourceService';
 
 function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sources, setSources] = useState([]);
+  const [selectedSource, setSelectedSource] = useState(null);
   
   const searchParams = new URLSearchParams(location.search);
   const currentTag = searchParams.get('tag');
+  const currentSourceId = searchParams.get('source_id');
+
+  useEffect(() => {
+    fetchSources();
+  }, []);
+
+  useEffect(() => {
+    if (currentSourceId && sources.length > 0) {
+      const source = sources.find(s => s.id === currentSourceId);
+      setSelectedSource(source || null);
+    } else {
+      setSelectedSource(null);
+    }
+  }, [currentSourceId, sources]);
+
+  const fetchSources = async () => {
+    try {
+      const response = await getAllSources();
+      if (response.success && response.data) {
+        setSources(response.data);
+      }
+    } catch (error) {
+    }
+  };
+
+  const handleSourceChange = (sourceId) => {
+    if (sourceId) {
+      navigate(`/?source_id=${sourceId}`);
+    } else {
+      navigate('/');
+    }
+    setMobileMenuOpen(false);
+  };
 
   const categories = [
     {
-      title: 'Trang chủ',
+      title: 'Home',
       path: '/',
       subcategories: []
     },
     {
-      title: 'Tin tức',
+      title: 'News',
       path: '/news',
       subcategories: [
-        { name: 'Tất cả', tag: '' },
-        { name: 'Công nghệ', tag: 'technology' },
-        { name: 'Khoa học', tag: 'science' },
-        { name: 'Kinh doanh', tag: 'business' },
-        { name: 'Giải trí', tag: 'entertainment' },
+        { name: 'All', tag: '' },
+        { name: 'Technology', tag: 'technology' },
+        { name: 'Science', tag: 'science' },
+        { name: 'Business', tag: 'business' },
+        { name: 'Entertainment', tag: 'entertainment' },
       ]
     },
     {
-      title: 'Thế giới',
+      title: 'World',
       path: '/news',
       defaultTag: 'world',
       subcategories: [
-        { name: 'Quốc tế', tag: 'international' },
-        { name: 'Châu Á', tag: 'asia' },
-        { name: 'Châu Âu', tag: 'europe' },
-        { name: 'Châu Mỹ', tag: 'america' },
+        { name: 'International', tag: 'international' },
+        { name: 'Asia', tag: 'asia' },
+        { name: 'Europe', tag: 'europe' },
+        { name: 'America', tag: 'america' },
       ]
     },
     {
-      title: 'Công nghệ',
+      title: 'Technology',
       path: '/news',
       defaultTag: 'technology',
       subcategories: [
         { name: 'AI & Machine Learning', tag: 'ai' },
-        { name: 'Điện thoại', tag: 'mobile' },
-        { name: 'Máy tính', tag: 'computer' },
+        { name: 'Mobile', tag: 'mobile' },
+        { name: 'Computer', tag: 'computer' },
         { name: 'Internet', tag: 'internet' },
       ]
     },
@@ -84,6 +120,22 @@ function Navigation() {
           <Link to="/" className="text-[26px] font-bold text-[#9f224e] tracking-tight">
             NewsHub
           </Link>
+
+          {/* Source Filter Dropdown */}
+          <div className="hidden md:block mx-4">
+            <select 
+              value={currentSourceId || ''} 
+              onChange={(e) => handleSourceChange(e.target.value)}
+              className="select select-bordered select-sm text-[13px] w-[180px] border-gray-300 focus:border-[#9f224e] focus:outline-none"
+            >
+              <option value="">All Sources</option>
+              {sources.map(source => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
+          </div>
           
           <nav className="hidden md:flex items-center h-full">
             {categories.map((category, index) => (

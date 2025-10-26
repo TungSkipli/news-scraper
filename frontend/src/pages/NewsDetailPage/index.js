@@ -29,17 +29,17 @@ function NewsDetailPage() {
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    const weekday = date.toLocaleDateString('vi-VN', { weekday: 'long' });
-    const dateStr = date.toLocaleDateString('vi-VN', { 
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateStr = date.toLocaleDateString('en-US', { 
       day: '2-digit', 
       month: '2-digit', 
       year: 'numeric' 
     });
-    const time = date.toLocaleTimeString('vi-VN', { 
+    const time = date.toLocaleTimeString('en-US', { 
       hour: '2-digit', 
       minute: '2-digit' 
     });
-    return `${weekday}, ${dateStr}, ${time} (GMT+7)`;
+    return `${weekday}, ${dateStr}, ${time}`;
   };
 
   if (loading) {
@@ -58,7 +58,7 @@ function NewsDetailPage() {
             <span>{error}</span>
           </div>
           <button onClick={() => navigate('/')} className="btn btn-primary mt-4">
-            ← Về trang chủ
+            ← Back to Home
           </button>
         </div>
       </div>
@@ -69,7 +69,7 @@ function NewsDetailPage() {
     return (
       <div className="min-h-screen bg-white py-8 px-4">
         <div className="max-w-3xl mx-auto text-center">
-          <p className="text-lg text-base-content/60">Không tìm thấy bài viết</p>
+          <p className="text-lg text-base-content/60">Article not found</p>
         </div>
       </div>
     );
@@ -83,7 +83,7 @@ function NewsDetailPage() {
             onClick={() => navigate('/')}
             className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
           >
-            ← Trang chủ
+            Back to Home
           </button>
         </div>
       </div>
@@ -106,12 +106,31 @@ function NewsDetailPage() {
         )}
 
         <div className="text-xs text-gray-500 mb-5 pb-5 border-b border-gray-200">
-          {formatDate(article.published_at)}
-          {article.authors && (
-            <span className="ml-3">
-              - {article.authors}
-            </span>
+          {article.source_name && (
+            <div className="mb-2">
+              <span className="font-semibold text-primary">Source:</span>{' '}
+              <button 
+                onClick={() => navigate(`/source/${article.source_id}`)}
+                className="text-primary hover:underline"
+              >
+                {article.source_name}
+              </button>
+              {article.category_name && (
+                <>
+                  {' • '}
+                  <span className="text-secondary">{article.category_name}</span>
+                </>
+              )}
+            </div>
           )}
+          <div>
+            {formatDate(article.published_at)}
+            {article.authors && (
+              <span className="ml-3">
+                - {article.authors}
+              </span>
+            )}
+          </div>
         </div>
 
         {article.image?.url && (
@@ -161,7 +180,7 @@ function NewsDetailPage() {
               rel="noopener noreferrer"
               className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
             >
-              Xem bài viết gốc →
+              View Original Article →
             </a>
           </div>
         )}

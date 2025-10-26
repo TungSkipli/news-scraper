@@ -56,7 +56,6 @@ function NewsListPage() {
       const response = await getTags();
       setTags(response.data);
     } catch (err) {
-      console.error('Failed to fetch tags:', err);
     }
   };
 
@@ -124,10 +123,10 @@ function NewsListPage() {
     <div className="min-h-screen bg-[#f7f7f7]">
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-[1130px] mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold mb-4">Tất cả tin tức</h1>
+          <h1 className="text-2xl font-bold mb-4">All News</h1>
           <input
             type="text"
-            placeholder="Tìm kiếm tin tức..."
+            placeholder="Search news..."
             value={search}
             onChange={handleSearch}
             className="input input-bordered w-full max-w-md"
@@ -139,7 +138,7 @@ function NewsListPage() {
         <div className="flex gap-6">
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <div className="bg-white p-4 rounded sticky top-20">
-              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Chủ đề</h3>
+              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Topics</h3>
               <div className="space-y-1">
                 <button
                   onClick={() => handleTagFilter('')}
@@ -147,7 +146,7 @@ function NewsListPage() {
                     selectedTag === '' ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
                   }`}
                 >
-                  Tất cả
+                  All
                 </button>
                 {tags.map((tag, index) => (
                   <button
@@ -167,7 +166,7 @@ function NewsListPage() {
                   onClick={() => navigate('/scraper')}
                   className="btn btn-primary btn-sm w-full"
                 >
-                  Scrape tin mới
+                  Scrape New Articles
                 </button>
               </div>
             </div>
@@ -180,7 +179,7 @@ function NewsListPage() {
                 onChange={(e) => handleTagFilter(e.target.value)}
                 className="select select-bordered select-sm w-full"
               >
-                <option value="">Tất cả chủ đề</option>
+                <option value="">All Topics</option>
                 {tags.map((tag, index) => (
                   <option key={index} value={tag}>{tag}</option>
                 ))}
@@ -204,8 +203,8 @@ function NewsListPage() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <h3 className="text-lg font-bold mb-2 text-gray-900">Không tìm thấy bài viết</h3>
-                <p className="text-gray-500 text-sm">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
+                <h3 className="text-lg font-bold mb-2 text-gray-900">No articles found</h3>
+                <p className="text-gray-500 text-sm">Try changing filters or search keywords</p>
               </div>
             ) : (
               <>

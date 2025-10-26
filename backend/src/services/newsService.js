@@ -5,7 +5,7 @@ const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
   try {
     let query = db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.TECH);
+      .collection(FIREBASE_COLLECTIONS.GLOBAL);
 
     if (tag) {
       query = query.where('tags', 'array-contains', tag);
@@ -77,7 +77,6 @@ const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
       };
     }
   } catch (error) {
-    console.error('Error fetching news:', error);
     throw error;
   }
 };
@@ -86,7 +85,7 @@ const getNewsById = async (id) => {
   try {
     const doc = await db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.TECH)
+      .collection(FIREBASE_COLLECTIONS.GLOBAL)
       .doc(id)
       .get();
     
@@ -99,7 +98,6 @@ const getNewsById = async (id) => {
       ...doc.data()
     };
   } catch (error) {
-    console.error('Error fetching news by ID:', error);
     throw error;
   }
 };
@@ -108,7 +106,7 @@ const getStats = async () => {
   try {
     const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.TECH)
+      .collection(FIREBASE_COLLECTIONS.GLOBAL)
       .get();
     const articles = snapshot.docs.map(doc => doc.data());
 
@@ -157,7 +155,6 @@ const getStats = async () => {
       last7Days
     };
   } catch (error) {
-    console.error('Error fetching stats:', error);
     throw error;
   }
 };
@@ -166,7 +163,7 @@ const getAllTags = async () => {
   try {
     const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.TECH)
+      .collection(FIREBASE_COLLECTIONS.GLOBAL)
       .get();
     const articles = snapshot.docs.map(doc => doc.data());
 
@@ -179,7 +176,6 @@ const getAllTags = async () => {
 
     return Array.from(tagsSet).sort();
   } catch (error) {
-    console.error('Error fetching tags:', error);
     throw error;
   }
 };
@@ -188,7 +184,7 @@ const getFeaturedNews = async ({ limit = 6 }) => {
   try {
     const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.TECH)
+      .collection(FIREBASE_COLLECTIONS.GLOBAL)
       .orderBy('published_at', 'desc')
       .limit(limit)
       .get();
@@ -200,7 +196,6 @@ const getFeaturedNews = async ({ limit = 6 }) => {
 
     return articles;
   } catch (error) {
-    console.error('Error fetching featured news:', error);
     throw error;
   }
 };
@@ -209,7 +204,7 @@ const getLatestNews = async ({ limit = 10 }) => {
   try {
     const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.TECH)
+      .collection(FIREBASE_COLLECTIONS.GLOBAL)
       .orderBy('published_at', 'desc')
       .limit(limit)
       .get();
@@ -221,7 +216,6 @@ const getLatestNews = async ({ limit = 10 }) => {
 
     return articles;
   } catch (error) {
-    console.error('Error fetching latest news:', error);
     throw error;
   }
 };

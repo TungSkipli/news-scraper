@@ -16,7 +16,6 @@ const getNews = async (req, res, next) => {
       data: result
     });
   } catch (error) {
-    console.error('Error in getNews:', error);
     next(error);
   }
 };
@@ -38,7 +37,6 @@ const getNewsDetail = async (req, res, next) => {
       data: article
     });
   } catch (error) {
-    console.error('Error in getNewsDetail:', error);
     next(error);
   }
 };
@@ -52,7 +50,6 @@ const getNewsStats = async (req, res, next) => {
       data: stats
     });
   } catch (error) {
-    console.error('Error in getNewsStats:', error);
     next(error);
   }
 };
@@ -66,7 +63,6 @@ const getTags = async (req, res, next) => {
       data: tags
     });
   } catch (error) {
-    console.error('Error in getTags:', error);
     next(error);
   }
 };
@@ -83,7 +79,6 @@ const getFeatured = async (req, res, next) => {
       data: articles
     });
   } catch (error) {
-    console.error('Error in getFeatured:', error);
     next(error);
   }
 };
@@ -100,7 +95,6 @@ const getLatest = async (req, res, next) => {
       data: articles
     });
   } catch (error) {
-    console.error('Error in getLatest:', error);
     next(error);
   }
 };

@@ -24,4 +24,5 @@ module.exports = {
   app,
   auth: admin.auth(app),
   db: admin.firestore(app),
+  FieldValue: admin.firestore.FieldValue,
 };

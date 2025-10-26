@@ -4,6 +4,8 @@ import HomePage from './pages/HomePage';
 import NewsListPage from './pages/NewsListPage';
 import NewsDetailPage from './pages/NewsDetailPage';
 import ScraperPage from './pages/ScraperPage';
+import SourcePage from './pages/SourcePage';
+import CategoryPage from './pages/CategoryPage';
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
           <Route path="/news" element={<NewsListPage />} />
           <Route path="/scraper" element={<ScraperPage />} />
           <Route path="/news/:id" element={<NewsDetailPage />} />
+          <Route path="/source/:id" element={<SourcePage />} />
+          <Route path="/source/:sourceId/category/:categoryId" element={<CategoryPage />} />
         </Routes>
       </div>
     </Router>
