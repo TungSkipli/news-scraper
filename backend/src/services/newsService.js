@@ -184,9 +184,53 @@ const getAllTags = async () => {
   }
 };
 
+const getFeaturedNews = async ({ limit = 6 }) => {
+  try {
+    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.TECH)
+      .orderBy('published_at', 'desc')
+      .limit(limit)
+      .get();
+
+    const articles = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    return articles;
+  } catch (error) {
+    console.error('Error fetching featured news:', error);
+    throw error;
+  }
+};
+
+const getLatestNews = async ({ limit = 10 }) => {
+  try {
+    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.TECH)
+      .orderBy('published_at', 'desc')
+      .limit(limit)
+      .get();
+
+    const articles = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    return articles;
+  } catch (error) {
+    console.error('Error fetching latest news:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   getAllNews,
   getNewsById,
   getStats,
-  getAllTags
+  getAllTags,
+  getFeaturedNews,
+  getLatestNews
 };

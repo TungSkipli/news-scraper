@@ -1,4 +1,4 @@
-const { getAllNews, getNewsById, getStats, getAllTags } = require('../services/newsService');
+const { getAllNews, getNewsById, getStats, getAllTags, getFeaturedNews, getLatestNews } = require('../services/newsService');
 
 const getNews = async (req, res, next) => {
   try {
@@ -71,9 +71,45 @@ const getTags = async (req, res, next) => {
   }
 };
 
+const getFeatured = async (req, res, next) => {
+  try {
+    const { limit } = req.query;
+    const articles = await getFeaturedNews({ 
+      limit: parseInt(limit) || 6 
+    });
+
+    res.json({
+      success: true,
+      data: articles
+    });
+  } catch (error) {
+    console.error('Error in getFeatured:', error);
+    next(error);
+  }
+};
+
+const getLatest = async (req, res, next) => {
+  try {
+    const { limit } = req.query;
+    const articles = await getLatestNews({ 
+      limit: parseInt(limit) || 10 
+    });
+
+    res.json({
+      success: true,
+      data: articles
+    });
+  } catch (error) {
+    console.error('Error in getLatest:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getNews,
   getNewsDetail,
   getNewsStats,
-  getTags
+  getTags,
+  getFeatured,
+  getLatest
 };

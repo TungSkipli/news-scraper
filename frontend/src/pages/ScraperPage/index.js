@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { scrapeNews } from '../services/scrapeService';
+import { scrapeNews } from '../../services/scrapeService';
 
 function Scraper() {
   const [loading, setLoading] = useState(false);

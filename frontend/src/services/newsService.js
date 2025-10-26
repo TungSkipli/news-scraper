@@ -23,3 +23,17 @@ export const getTags = async () => {
   const response = await axios.get(`${API_URL}/news/tags`);
   return response.data;
 };
+
+export const getFeatured = async (limit = 6) => {
+  const response = await axios.get(`${API_URL}/news/featured`, {
+    params: { limit }
+  });
+  return response.data;
+};
+
+export const getLatest = async (limit = 10) => {
+  const response = await axios.get(`${API_URL}/news/latest`, {
+    params: { limit }
+  });
+  return response.data;
+};
