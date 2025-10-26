@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getNews, getTags } from '../../services/newsService';
 import NewsCard from '../../components/shared/NewsCard';
 
 function NewsListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,12 @@ function NewsListPage() {
   useEffect(() => {
     fetchTags();
   }, []);
+
+  useEffect(() => {
+    const tagFromUrl = searchParams.get('tag');
+    setSelectedTag(tagFromUrl);
+    setCurrentPage(1);
+  }, [searchParams]);
 
   useEffect(() => {
     fetchNews();
@@ -114,86 +121,141 @@ function NewsListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="bg-base-100 border-b border-base-300 py-6">
-        <div className="container mx-auto px-4 max-w-7xl">
-          <h1 className="text-3xl font-bold mb-4">Tất cả tin tức</h1>
-          
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Tìm kiếm tin tức..."
-                value={search}
-                onChange={handleSearch}
-                className="input input-bordered w-full"
-              />
-            </div>
-            <button
-              onClick={() => navigate('/scraper')}
-              className="btn btn-primary"
-            >
-              Scrape tin mới
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-2 mt-4">
-            {tags.slice(0, 10).map((tag, index) => (
-              <button
-                key={index}
-                onClick={() => handleTagFilter(tag)}
-                className={`badge badge-lg cursor-pointer hover:badge-primary transition-colors ${
-                  selectedTag === tag ? 'badge-primary' : 'badge-outline'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
+    <div className="min-h-screen bg-[#f7f7f7]">
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-[1130px] mx-auto px-4 py-4">
+          <h1 className="text-2xl font-bold mb-4">Tất cả tin tức</h1>
+          <input
+            type="text"
+            placeholder="Tìm kiếm tin tức..."
+            value={search}
+            onChange={handleSearch}
+            className="input input-bordered w-full max-w-md"
+          />
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
-        {error && (
-          <div className="alert alert-error mb-6">
-            <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{error}</span>
-          </div>
-        )}
+      <div className="max-w-[1130px] mx-auto px-4 py-6">
+        <div className="flex gap-6">
+          <aside className="hidden lg:block w-64 flex-shrink-0">
+            <div className="bg-white p-4 rounded sticky top-20">
+              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Chủ đề</h3>
+              <div className="space-y-1">
+                <button
+                  onClick={() => handleTagFilter('')}
+                  className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
+                    selectedTag === '' ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                  }`}
+                >
+                  Tất cả
+                </button>
+                {tags.map((tag, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleTagFilter(tag)}
+                    className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
+                      selectedTag === tag ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(limit)].map((_, index) => (
-              <div key={index} className="skeleton h-80"></div>
-            ))}
-          </div>
-        ) : articles.length === 0 ? (
-          <div className="text-center py-16">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-base-content/20 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="text-xl font-bold mb-2">Không tìm thấy bài viết</h3>
-            <p className="text-base-content/60">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {articles.map((article) => (
-                <NewsCard
-                  key={article.id}
-                  article={article}
-                  onClick={() => navigate(`/news/${article.id}`)}
-                />
-              ))}
+              <div className="mt-6 pt-6 border-t">
+                <button 
+                  onClick={() => navigate('/scraper')}
+                  className="btn btn-primary btn-sm w-full"
+                >
+                  Scrape tin mới
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          <main className="flex-1 min-w-0">
+            <div className="lg:hidden mb-4 bg-white p-3 rounded">
+              <select 
+                value={selectedTag}
+                onChange={(e) => handleTagFilter(e.target.value)}
+                className="select select-bordered select-sm w-full"
+              >
+                <option value="">Tất cả chủ đề</option>
+                {tags.map((tag, index) => (
+                  <option key={index} value={tag}>{tag}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="flex justify-center">
-              {renderPagination()}
-            </div>
-          </>
-        )}
+            {error && (
+              <div className="alert alert-error mb-4">
+                <span>{error}</span>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[...Array(limit)].map((_, index) => (
+                  <div key={index} className="skeleton h-64 bg-white"></div>
+                ))}
+              </div>
+            ) : articles.length === 0 ? (
+              <div className="bg-white rounded p-16 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-lg font-bold mb-2 text-gray-900">Không tìm thấy bài viết</h3>
+                <p className="text-gray-500 text-sm">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {articles.map((article) => (
+                    <div 
+                      key={article.id}
+                      className="bg-white rounded hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => navigate(`/news/${article.id}`)}
+                    >
+                      <div className="flex gap-4 p-4">
+                        <div className="flex-shrink-0 w-48 h-32 overflow-hidden rounded">
+                          <img
+                            src={article.image?.url || article.thumbnail || 'https://via.placeholder.com/300x200'}
+                            alt={article.title}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            {article.tags && article.tags[0] && (
+                              <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                                {article.tags[0]}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-bold text-lg mb-2 line-clamp-2 hover:text-[#9f224e] transition-colors">
+                            {article.title}
+                          </h3>
+                          <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                            {article.summary}
+                          </p>
+                          <span className="text-xs text-gray-400">
+                            {new Date(article.published_at).toLocaleDateString('vi-VN')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="flex justify-center mt-6">
+                    {renderPagination()}
+                  </div>
+                )}
+              </>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );

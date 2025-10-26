@@ -29,69 +29,37 @@ function NewsDetailPage() {
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    return date.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    const weekday = date.toLocaleDateString('vi-VN', { weekday: 'long' });
+    const dateStr = date.toLocaleDateString('vi-VN', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
     });
+    const time = date.toLocaleTimeString('vi-VN', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    return `${weekday}, ${dateStr}, ${time} (GMT+7)`;
   };
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#f3f4f6',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          border: '4px solid #e5e7eb',
-          borderTopColor: '#2563eb',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg text-primary"></span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#f3f4f6',
-        padding: '2rem 1rem'
-      }}>
-        <div style={{ maxWidth: '896px', margin: '0 auto' }}>
-          <div style={{
-            padding: '2rem',
-            backgroundColor: '#fee2e2',
-            border: '1px solid #fecaca',
-            borderRadius: '8px',
-            color: '#991b1b',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Error</h3>
-            <p>{error}</p>
-              <button
-                onClick={() => navigate('/')}
-              style={{
-                marginTop: '1rem',
-                padding: '0.5rem 1rem',
-                backgroundColor: '#dc2626',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-                Back to Home
-            </button>
+      <div className="min-h-screen bg-white py-8 px-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="alert alert-error">
+            <span>{error}</span>
           </div>
+          <button onClick={() => navigate('/')} className="btn btn-primary mt-4">
+            ← Về trang chủ
+          </button>
         </div>
       </div>
     );
@@ -99,187 +67,105 @@ function NewsDetailPage() {
 
   if (!article) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#f3f4f6',
-        padding: '2rem 1rem'
-      }}>
-        <div style={{ maxWidth: '896px', margin: '0 auto', textAlign: 'center' }}>
-          <p style={{ fontSize: '1.125rem', color: '#6b7280' }}>Article not found</p>
+      <div className="min-h-screen bg-white py-8 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <p className="text-lg text-base-content/60">Không tìm thấy bài viết</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', padding: '2rem 1rem' }}>
-      <div style={{ maxWidth: '896px', margin: '0 auto' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: 'white',
-            border: '1px solid #d1d5db',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            marginBottom: '1.5rem',
-            fontSize: '0.875rem',
-            color: '#374151',
-            transition: 'background-color 0.2s'
-          }}
-          onMouseEnter={(e) => e.target.style.backgroundColor = '#f9fafb'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-        >
-            ← Back
-        </button>
+    <div className="min-h-screen bg-[#f7f7f7]">
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-[680px] mx-auto px-4 py-3">
+          <button
+            onClick={() => navigate('/')}
+            className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
+          >
+            ← Trang chủ
+          </button>
+        </div>
+      </div>
 
-        <article style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '2rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <h1 style={{
-            fontSize: '2rem',
-            fontWeight: 'bold',
-            color: '#111827',
-            marginBottom: '1rem',
-            lineHeight: '1.3'
-          }}>
-            {article.title}
-          </h1>
-
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '1rem',
-            paddingBottom: '1rem',
-            marginBottom: '1.5rem',
-            borderBottom: '2px solid #e5e7eb',
-            fontSize: '0.875rem',
-            color: '#6b7280'
-          }}>
-            <span>📅 {formatDate(article.published_at)}</span>
-            {article.authors && <span>✍️ {article.authors}</span>}
+      <div className="max-w-[680px] mx-auto px-4 py-6 bg-white mt-4">
+        {article.tags && article.tags.length > 0 && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs text-gray-500 uppercase">{article.tags[0]}</span>
           </div>
+        )}
 
-          {article.tags && article.tags.length > 0 && (
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.5rem',
-              marginBottom: '1.5rem'
-            }}>
+        <h1 className="text-[28px] leading-[1.4] font-bold text-gray-900 mb-4">
+          {article.title}
+        </h1>
+
+        {article.summary && (
+          <p className="text-[15px] leading-[1.6] text-gray-700 font-normal mb-5">
+            {article.summary}
+          </p>
+        )}
+
+        <div className="text-xs text-gray-500 mb-5 pb-5 border-b border-gray-200">
+          {formatDate(article.published_at)}
+          {article.authors && (
+            <span className="ml-3">
+              - {article.authors}
+            </span>
+          )}
+        </div>
+
+        {article.image?.url && (
+          <figure className="mb-5">
+            <img
+              src={article.image.url}
+              alt={article.title}
+              className="w-full"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            {article.image.caption && (
+              <figcaption className="text-xs text-gray-500 italic mt-1">
+                {article.image.caption}
+              </figcaption>
+            )}
+          </figure>
+        )}
+
+        {article.content && (
+          <div className="text-[15px] leading-[1.8] text-gray-800 whitespace-pre-wrap">
+            {article.content}
+          </div>
+        )}
+
+        {article.tags && article.tags.length > 0 && (
+          <div className="mt-8 pt-5 border-t border-gray-200">
+            <div className="flex flex-wrap gap-2">
               {article.tags.map((tag, index) => (
                 <span
                   key={index}
-                  style={{
-                    fontSize: '0.875rem',
-                    padding: '0.375rem 0.875rem',
-                    backgroundColor: '#dbeafe',
-                    color: '#1e40af',
-                    borderRadius: '12px',
-                    fontWeight: '500'
-                  }}
+                  className="text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 transition-colors cursor-pointer"
                 >
                   {tag}
                 </span>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {article.summary && (
-            <p style={{
-              fontSize: '1.125rem',
-              color: '#374151',
-              fontWeight: '500',
-              marginBottom: '1.5rem',
-              lineHeight: '1.7',
-              fontStyle: 'italic',
-              paddingLeft: '1rem',
-              borderLeft: '4px solid #2563eb'
-            }}>
-              {article.summary}
-            </p>
-          )}
-
-          {article.image?.url && (
-            <figure style={{ marginBottom: '2rem' }}>
-              <img
-                src={article.image.url}
-                alt={article.title}
-                style={{
-                  width: '100%',
-                  borderRadius: '8px',
-                  marginBottom: '0.5rem'
-                }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-              />
-              {article.image.caption && (
-                <figcaption style={{
-                  fontSize: '0.875rem',
-                  color: '#6b7280',
-                  fontStyle: 'italic',
-                  textAlign: 'center'
-                }}>
-                  {article.image.caption}
-                </figcaption>
-              )}
-            </figure>
-          )}
-
-          {article.content && (
-            <div style={{
-              fontSize: '1rem',
-              color: '#374151',
-              lineHeight: '1.8',
-              whiteSpace: 'pre-wrap'
-            }}>
-              {article.content}
-            </div>
-          )}
-
-          {article.external_source && (
-            <div style={{
-              marginTop: '2rem',
-              paddingTop: '1.5rem',
-              borderTop: '1px solid #e5e7eb'
-            }}>
-              <a
-                href={article.external_source}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  color: '#2563eb',
-                  textDecoration: 'none',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  transition: 'color 0.2s'
-                }}
-                onMouseEnter={(e) => e.target.style.color = '#1d4ed8'}
-                onMouseLeave={(e) => e.target.style.color = '#2563eb'}
-              >
-                View original article →
-              </a>
-            </div>
-          )}
-        </article>
+        {article.external_source && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <a
+              href={article.external_source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+            >
+              Xem bài viết gốc →
+            </a>
+          </div>
+        )}
       </div>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

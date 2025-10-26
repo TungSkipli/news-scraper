@@ -26,7 +26,7 @@ function NewsCard({ article, onClick, variant = 'default' }) {
       >
         <div className="md:w-2/3">
           <img
-            src={article.thumbnail || 'https://via.placeholder.com/800x400'}
+            src={article.image?.url || article.thumbnail || 'https://via.placeholder.com/800x400'}
             alt={article.title}
             className="w-full h-64 md:h-80 object-cover"
           />
@@ -60,7 +60,7 @@ function NewsCard({ article, onClick, variant = 'default' }) {
       >
         <div className="w-32 h-20 flex-shrink-0">
           <img
-            src={article.thumbnail || 'https://via.placeholder.com/200x120'}
+            src={article.image?.url || article.thumbnail || 'https://via.placeholder.com/200x120'}
             alt={article.title}
             className="w-full h-full object-cover"
           />
@@ -84,7 +84,7 @@ function NewsCard({ article, onClick, variant = 'default' }) {
     >
       <div className="mb-3 overflow-hidden">
         <img
-          src={article.thumbnail || 'https://via.placeholder.com/400x250'}
+          src={article.image?.url || article.thumbnail || 'https://via.placeholder.com/400x250'}
           alt={article.title}
           className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
         />

@@ -20,7 +20,7 @@ function HomePage() {
       setLoading(true);
       const [featuredRes, latestRes, statsRes] = await Promise.all([
         getFeatured(1),
-        getLatest(10),
+        getLatest(8),
         getStats()
       ]);
 
@@ -29,8 +29,8 @@ function HomePage() {
       }
       
       if (latestRes.data && latestRes.data.length > 0) {
-        setLatestArticles(latestRes.data.slice(1, 7));
-        setSidebarArticles(latestRes.data.slice(7, 10));
+        setLatestArticles(latestRes.data.slice(1, 5));
+        setSidebarArticles(latestRes.data.slice(5, 8));
       }
       
       setStats(statsRes.data);
@@ -63,8 +63,8 @@ function HomePage() {
             {loading ? (
               <div className="space-y-6">
                 <div className="skeleton h-80 w-full"></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[...Array(6)].map((_, i) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[...Array(4)].map((_, i) => (
                     <div key={i} className="skeleton h-64"></div>
                   ))}
                 </div>
@@ -79,22 +79,27 @@ function HomePage() {
                   />
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                  {latestArticles.map((article) => (
-                    <NewsCard
-                      key={article.id}
-                      article={article}
-                      onClick={() => navigate(`/news/${article.id}`)}
-                    />
-                  ))}
+                <div className="mt-6">
+                  <h2 className="text-xl font-bold mb-4 pb-2 border-b border-base-300">
+                    Tin mới nhất
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {latestArticles.map((article) => (
+                      <NewsCard
+                        key={article.id}
+                        article={article}
+                        onClick={() => navigate(`/news/${article.id}`)}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 <div className="text-center mt-8">
                   <button 
-                    className="btn btn-outline btn-primary"
+                    className="btn btn-outline btn-primary btn-wide"
                     onClick={() => navigate('/news')}
                   >
-                    Xem tất cả tin tức
+                    Xem tất cả tin tức →
                   </button>
                 </div>
               </>
