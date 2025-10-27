@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getArticles, getAllCategories } from '../../services/sourceService';
+import { getArticles, getAllCategories, getAllSources } from '../../services/sourceService';
 import NewsCard from '../../components/shared/NewsCard';
 
 function NewsListPage() {
@@ -8,6 +8,7 @@ function NewsListPage() {
   const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -20,6 +21,7 @@ function NewsListPage() {
 
   useEffect(() => {
     fetchCategories();
+    fetchSources();
   }, []);
 
   useEffect(() => {
@@ -73,7 +75,16 @@ function NewsListPage() {
         setCategories(response.data);
       }
     } catch (err) {
-      console.error('Failed to fetch categories:', err);
+    }
+  };
+
+  const fetchSources = async () => {
+    try {
+      const response = await getAllSources();
+      if (response.success) {
+        setSources(response.data);
+      }
+    } catch (err) {
     }
   };
 
@@ -95,6 +106,19 @@ function NewsListPage() {
   const handlePageChange = (page) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const groupCategoriesBySource = () => {
+    const grouped = {};
+    
+    sources.forEach(source => {
+      grouped[source.id] = {
+        source: source,
+        categories: categories.filter(cat => cat.source_id === source.id)
+      };
+    });
+    
+    return grouped;
   };
 
   const renderPagination = () => {
@@ -163,7 +187,7 @@ function NewsListPage() {
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <div className="bg-white p-4 rounded sticky top-20">
               <h3 className="font-bold text-sm mb-3 pb-2 border-b">Categories</h3>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <button
                   onClick={() => handleCategoryFilter('')}
                   className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
@@ -172,19 +196,27 @@ function NewsListPage() {
                 >
                   All
                 </button>
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => handleCategoryFilter(category.id)}
-                    className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-[#9f224e] transition-colors ${
-                      selectedCategory === category.id ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span>{category.name}</span>
-                      <span className="text-xs text-gray-400">({category.total_articles || 0})</span>
+                
+                {Object.values(groupCategoriesBySource()).map(({ source, categories: sourceCategories }) => (
+                  <div key={source.id} className="space-y-1">
+                    <div className="font-semibold text-xs text-gray-700 px-3 py-2">
+                      {source.name}
                     </div>
-                  </button>
+                    {sourceCategories.map((category) => (
+                      <button
+                        key={category.id}
+                        onClick={() => handleCategoryFilter(category.id)}
+                        className={`w-full text-left pl-6 pr-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
+                          selectedCategory === category.id ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span>{category.name}</span>
+                          <span className="text-xs text-gray-400">({category.total_articles || 0})</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
 
