@@ -1,22 +1,17 @@
 const { scrapeUrl, scrapeAndSave } = require('../services/universalScraper');
 const { scrapeEntireSource, scrapeSingleCategory } = require('../services/sourceOrchestrator');
 const { detectCategories } = require('../services/homepageDetector');
+const { validateUrl, validateUrlArray } = require('../utils/validators');
 
 const scrapeUrlController = async (req, res, next) => {
   try {
     const { url } = req.body;
 
-    if (!url) {
+    const validation = validateUrl(url);
+    if (!validation.valid) {
       return res.status(400).json({
         success: false,
-        message: 'URL is required'
-      });
-    }
-
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid URL format. URL must start with http:// or https://'
+        message: validation.message
       });
     }
 
@@ -40,17 +35,11 @@ const scrapeAndSaveController = async (req, res, next) => {
   try {
     const { url } = req.body;
 
-    if (!url) {
+    const validation = validateUrl(url);
+    if (!validation.valid) {
       return res.status(400).json({
         success: false,
-        message: 'URL is required'
-      });
-    }
-
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid URL format. URL must start with http:// or https://'
+        message: validation.message
       });
     }
 
@@ -78,10 +67,11 @@ const batchScrapeController = async (req, res, next) => {
   try {
     const { urls } = req.body;
 
-    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    const validation = validateUrlArray(urls);
+    if (!validation.valid) {
       return res.status(400).json({
         success: false,
-        message: 'URLs array is required'
+        message: validation.message
       });
     }
 
@@ -136,17 +126,11 @@ const scrapeSourceController = async (req, res, next) => {
   try {
     const { url, options } = req.body;
 
-    if (!url) {
+    const validation = validateUrl(url);
+    if (!validation.valid) {
       return res.status(400).json({
         success: false,
-        message: 'Homepage URL is required'
-      });
-    }
-
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid URL format. URL must start with http:// or https://'
+        message: validation.message
       });
     }
 

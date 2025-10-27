@@ -3,7 +3,9 @@ const {
   getSourceByDomain,
   getCategoriesBySource,
   getAllCategories,
-  getArticles
+  getArticles,
+  getSourceById,
+  getArticleById
 } = require('../services/sourceService');
 
 const getSourcesController = async (req, res) => {
@@ -27,10 +29,9 @@ const getSourceController = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const { db } = require('../config/firebase');
-    const doc = await db.collection('sources').doc(id).get();
+    const source = await getSourceById(id);
     
-    if (!doc.exists) {
+    if (!source) {
       return res.status(404).json({
         success: false,
         message: 'Source not found'
@@ -39,7 +40,7 @@ const getSourceController = async (req, res) => {
     
     res.json({
       success: true,
-      data: { id: doc.id, ...doc.data() }
+      data: source
     });
   } catch (error) {
     res.status(500).json({
@@ -97,15 +98,9 @@ const getArticleController = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const { db } = require('../config/firebase');
-    const doc = await db
-      .collection('news')
-      .doc('articles')
-      .collection('global')
-      .doc(id)
-      .get();
+    const article = await getArticleById(id);
     
-    if (!doc.exists) {
+    if (!article) {
       return res.status(404).json({
         success: false,
         message: 'Article not found'
@@ -114,7 +109,7 @@ const getArticleController = async (req, res) => {
     
     res.json({
       success: true,
-      data: { id: doc.id, ...doc.data() }
+      data: article
     });
   } catch (error) {
     res.status(500).json({

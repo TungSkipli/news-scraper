@@ -23,6 +23,9 @@ const CATEGORY_NAV_SELECTORS = [
   '.pin-menu a[href*="/"]'
 ];
 
+const CATEGORY_DETECTION_DELAY = SCRAPER_CONFIG.CATEGORY_DETECTION_DELAY || 3000;
+const NAV_TIMEOUT = SCRAPER_CONFIG.NAV_TIMEOUT || 60000;
+
 const extractDomain = (url) => {
   try {
     const urlObj = new URL(url);
@@ -63,10 +66,10 @@ const detectCategories = async (homepageUrl) => {
 
     await page.goto(homepageUrl, {
       waitUntil: 'domcontentloaded',
-      timeout: 60000
+      timeout: NAV_TIMEOUT
     });
 
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, CATEGORY_DETECTION_DELAY));
 
     const result = await page.evaluate((selectors, baseUrl) => {
       const baseDomain = new URL(baseUrl).origin;

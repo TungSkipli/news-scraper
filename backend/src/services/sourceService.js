@@ -1,4 +1,5 @@
 const { db, FieldValue } = require('../config/firebase');
+const { createSlug } = require('../utils/slugGenerator');
 
 const COLLECTIONS = {
   SOURCES: 'sources',
@@ -51,12 +52,7 @@ const saveCategory = async (sourceId, sourceDomain, categoryData) => {
   try {
     const { name, url } = categoryData;
 
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    const slug = createSlug(name);
 
     const existingCategory = await db
       .collection(COLLECTIONS.CATEGORIES)
@@ -209,6 +205,39 @@ const getArticles = async (filters = {}) => {
   }
 };
 
+const getSourceById = async (sourceId) => {
+  try {
+    const doc = await db.collection(COLLECTIONS.SOURCES).doc(sourceId).get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getArticleById = async (articleId) => {
+  try {
+    const doc = await db
+      .collection('news')
+      .doc('articles')
+      .collection('global')
+      .doc(articleId)
+      .get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   saveSource,
   saveCategory,
@@ -218,5 +247,7 @@ module.exports = {
   getCategoriesBySource,
   getAllCategories,
   getArticles,
+  getSourceById,
+  getArticleById,
   COLLECTIONS
 };

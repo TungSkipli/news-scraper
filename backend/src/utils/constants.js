@@ -1,8 +1,8 @@
 const PROXY_CONFIG = {
-  HOST: '154.202.3.19',
-  PORT: '49245',
-  USERNAME: 'user49245',
-  PASSWORD: 'K1C6FDl623',
+  HOST: process.env.PROXY_HOST || '',
+  PORT: process.env.PROXY_PORT || '',
+  USERNAME: process.env.PROXY_USERNAME || '',
+  PASSWORD: process.env.PROXY_PASSWORD || '',
   get URL() {
     return `${this.HOST}:${this.PORT}`;
   },
@@ -17,7 +17,9 @@ const SCRAPER_CONFIG = {
   RETRY_DELAY: 3000,
   PAGE_LOAD_DELAY: 2000,
   SCROLL_DELAY: 1000,
-  USE_PROXY: false
+  USE_PROXY: false,
+  CATEGORY_DETECTION_DELAY: 3000,
+  NAV_TIMEOUT: 60000
 };
 
 const BROWSER_CONFIG = {

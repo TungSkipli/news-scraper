@@ -3,6 +3,7 @@ const cors = require("cors");
 const scrapeRoutes = require('./routes/scrapeRoutes');
 const newsRoutes = require('./routes/newsRoutes');
 const sourceRoutes = require('./routes/sourceRoutes');
+const { logError } = require('./utils/errorHandler');
 
 const app = express();
 
@@ -38,6 +39,12 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
+    logError(error, { 
+        method: req.method, 
+        path: req.path,
+        query: req.query
+    });
+
     res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || 'Internal server error'
