@@ -270,7 +270,6 @@ const parseDate = (dateString) => {
       return date.getTime();
     }
   } catch (e) {
-    console.log('Failed to parse date:', dateString);
   }
 
   return Date.now();
@@ -284,8 +283,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
   let page;
 
   try {
-    console.log(`🔍 Scraping: ${url}`);
-    
     if (!url || !url.startsWith('http')) {
       throw new Error('Invalid URL format');
     }
@@ -293,7 +290,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
     browser = await createBrowser();
     page = await setupPage(browser, url);
 
-    console.log('📄 Loading page...');
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: SCRAPER_CONFIG.TIMEOUT
@@ -306,7 +302,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
     });
     await new Promise(resolve => setTimeout(resolve, SCRAPER_CONFIG.SCROLL_DELAY));
 
-    console.log('📦 Extracting data...');
     const rawData = await extractArticleData(page, url);
 
     await browser.close();
@@ -335,7 +330,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
       likes: DEFAULT_VALUES.LIKES
     };
 
-    console.log(`✅ Successfully scraped: ${article.title.substring(0, 50)}...`);
     return article;
 
   } catch (error) {
@@ -344,12 +338,10 @@ const scrapeUrl = async (url, retryCount = 0) => {
     }
 
     if (retryCount < SCRAPER_CONFIG.MAX_RETRIES) {
-      console.log(`⚠️  Retry ${retryCount + 1}/${SCRAPER_CONFIG.MAX_RETRIES} for ${url}`);
       await new Promise(resolve => setTimeout(resolve, SCRAPER_CONFIG.RETRY_DELAY));
       return await scrapeUrl(url, retryCount + 1);
     }
 
-    console.error(`❌ Failed to scrape ${url}:`, error.message);
     throw error;
   }
 };
@@ -361,14 +353,11 @@ const scrapeAndSave = async (url) => {
   try {
     const article = await scrapeUrl(url);
 
-    console.log('💾 Saving to Firebase...');
     const docRef = await db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
       .collection(FIREBASE_COLLECTIONS.GLOBAL)
       .add(article);
-
-    console.log(`✅ Saved with ID: ${docRef.id}`);
 
     return {
       success: true,
@@ -376,7 +365,6 @@ const scrapeAndSave = async (url) => {
       firebaseId: docRef.id
     };
   } catch (error) {
-    console.error('❌ Scrape and save error:', error.message);
     throw error;
   }
 };

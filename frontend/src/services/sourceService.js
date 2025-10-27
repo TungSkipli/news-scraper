@@ -17,6 +17,11 @@ export const getSourceCategories = async (sourceId) => {
   return response.data;
 };
 
+export const getAllCategories = async () => {
+  const response = await axios.get(`${API_URL}/api/categories`);
+  return response.data;
+};
+
 export const getArticles = async ({ source_id, category_id, limit = 50 }) => {
   const params = { limit };
   if (source_id) params.source_id = source_id;

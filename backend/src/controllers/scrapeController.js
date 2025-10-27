@@ -20,15 +20,7 @@ const scrapeUrlController = async (req, res, next) => {
       });
     }
 
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🚀 Starting scrape for: ${url}`);
-    console.log('='.repeat(60));
-
     const article = await scrapeUrl(url);
-
-    console.log('='.repeat(60));
-    console.log('✅ Scraping completed successfully!');
-    console.log('='.repeat(60) + '\n');
 
     res.json({
       success: true,
@@ -36,7 +28,6 @@ const scrapeUrlController = async (req, res, next) => {
       data: article
     });
   } catch (error) {
-    console.error('❌ Scraping error:', error.message);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to scrape URL',
@@ -104,7 +95,6 @@ const batchScrapeController = async (req, res, next) => {
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
-      console.log(`\n[${i + 1}/${urls.length}] Processing: ${url}`);
 
       try {
         const article = await scrapeUrl(url);
@@ -134,7 +124,6 @@ const batchScrapeController = async (req, res, next) => {
       data: results
     });
   } catch (error) {
-    console.error('❌ Batch scraping error:', error.message);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to batch scrape URLs',
@@ -161,6 +150,36 @@ const scrapeSourceController = async (req, res, next) => {
       });
     }
 
+    if (options?.mode === 'single' && options?.categoryUrl) {
+      const detection = await detectCategories(url);
+      const category = detection.categories.find(cat => cat.url === options.categoryUrl);
+
+      if (!category) {
+        return res.status(400).json({
+          success: false,
+          message: 'Category not found in detected categories'
+        });
+      }
+
+      const results = await scrapeSingleCategory(
+        options.categoryUrl,
+        {
+          ...detection.source,
+          categoryName: category.name
+        },
+        {
+          maxPages: options?.maxPages || 2,
+          maxArticles: options?.maxArticlesPerCategory || 20
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: 'Category scraped successfully',
+        data: results
+      });
+    }
+
     const scrapeOptions = {
       maxCategoriesPerSource: options?.maxCategories || 5,
       maxPagesPerCategory: options?.maxPages || 2,
@@ -176,7 +195,6 @@ const scrapeSourceController = async (req, res, next) => {
       data: results
     });
   } catch (error) {
-    console.error('❌ Source scraping error:', error.message);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to scrape source',

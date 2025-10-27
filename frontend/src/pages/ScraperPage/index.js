@@ -9,11 +9,16 @@ function Scraper() {
   const [scrapeResult, setScrapeResult] = useState(null);
   const [error, setError] = useState(null);
   const [sources, setSources] = useState([]);
+  const [scrapeMode, setScrapeMode] = useState('full');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
   const [scrapeOptions, setScrapeOptions] = useState({
     maxCategories: 2,
     maxPages: 1,
     maxArticlesPerCategory: 5
   });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const presetSources = [
     'https://vvnm.vietbao.com/',
@@ -64,28 +69,92 @@ function Scraper() {
     }
   };
 
+  const simulateProgress = (totalTime) => {
+    setProgress(0);
+    const interval = 100;
+    const steps = totalTime / interval;
+    let currentStep = 0;
+
+    const progressInterval = setInterval(() => {
+      currentStep++;
+      const newProgress = Math.min((currentStep / steps) * 95, 95);
+      setProgress(newProgress);
+
+      if (currentStep >= steps) {
+        clearInterval(progressInterval);
+      }
+    }, interval);
+
+    return progressInterval;
+  };
+
   const handleScrape = async () => {
     if (!homepageUrl) {
-      setError('Vui lòng nhập URL trang chủ');
+      setError('Please enter homepage URL');
+      return;
+    }
+
+    if (scrapeMode === 'single' && !selectedCategory) {
+      setError('Please select a category to scrape');
       return;
     }
 
     setLoading(true);
     setError(null);
     setScrapeResult(null);
+    setProgress(0);
+    setProgressMessage('Starting scraper...');
+
+    const estimatedTime = scrapeMode === 'full' 
+      ? scrapeOptions.maxCategories * scrapeOptions.maxArticlesPerCategory * 2000
+      : scrapeOptions.maxArticlesPerCategory * 2000;
+
+    const progressInterval = simulateProgress(estimatedTime);
 
     try {
-      const response = await scrapeSource(homepageUrl, scrapeOptions);
-      if (response.success) {
-        setScrapeResult(response.data);
-        await fetchSources();
+      if (scrapeMode === 'single') {
+        const category = detectedData.categories.find(cat => cat.url === selectedCategory);
+        setProgressMessage(`Scraping category: ${category?.name || 'Selected category'}...`);
+        
+        const response = await scrapeSource(homepageUrl, {
+          ...scrapeOptions,
+          categoryUrl: selectedCategory,
+          mode: 'single'
+        });
+
+        if (response.success) {
+          setScrapeResult(response.data);
+          await fetchSources();
+          setShowSuccessModal(true);
+        } else {
+          setError(response.message || 'Failed to scrape category');
+        }
       } else {
-        setError(response.message || 'Không thể scrape nguồn');
+        setProgressMessage(`Scraping all categories from source...`);
+        
+        const response = await scrapeSource(homepageUrl, scrapeOptions);
+        if (response.success) {
+          setScrapeResult(response.data);
+          await fetchSources();
+          setShowSuccessModal(true);
+        } else {
+          setError(response.message || 'Failed to scrape source');
+        }
       }
+
+      clearInterval(progressInterval);
+      setProgress(100);
+      setProgressMessage('Scraping completed!');
     } catch (err) {
-      setError(err.response?.data?.message || 'Lỗi khi scrape nguồn');
+      clearInterval(progressInterval);
+      setProgress(0);
+      setError(err.response?.data?.message || 'Error during scraping');
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        setProgress(0);
+        setProgressMessage('');
+      }, 3000);
     }
   };
 
@@ -108,7 +177,25 @@ function Scraper() {
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              URL trang chủ
+              Scrape Mode
+            </label>
+            <select
+              value={scrapeMode}
+              onChange={(e) => {
+                setScrapeMode(e.target.value);
+                setSelectedCategory('');
+              }}
+              className="select select-bordered w-full mb-4"
+              disabled={loading || detecting}
+            >
+              <option value="full">🌐 Full Source - Scrape all categories</option>
+              <option value="single">📂 Single Category - Scrape specific category</option>
+            </select>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Homepage URL
             </label>
             <input
               type="url"
@@ -119,6 +206,32 @@ function Scraper() {
               disabled={loading || detecting}
             />
           </div>
+
+          {scrapeMode === 'single' && detectedData && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Category to Scrape
+              </label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="select select-bordered w-full"
+                disabled={loading || detecting}
+              >
+                <option value="">-- Choose a category --</option>
+                {detectedData.categories.map((cat, index) => (
+                  <option key={index} value={cat.url}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              {selectedCategory && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Will scrape: {detectedData.categories.find(c => c.url === selectedCategory)?.name}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -139,23 +252,25 @@ function Scraper() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {scrapeMode === 'full' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Max Categories
+                </label>
+                <input
+                  type="number"
+                  value={scrapeOptions.maxCategories}
+                  onChange={(e) => setScrapeOptions({...scrapeOptions, maxCategories: parseInt(e.target.value)})}
+                  className="input input-bordered w-full"
+                  min="1"
+                  max="20"
+                  disabled={loading || detecting}
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Số danh mục tối đa
-              </label>
-              <input
-                type="number"
-                value={scrapeOptions.maxCategories}
-                onChange={(e) => setScrapeOptions({...scrapeOptions, maxCategories: parseInt(e.target.value)})}
-                className="input input-bordered w-full"
-                min="1"
-                max="20"
-                disabled={loading || detecting}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Số trang mỗi danh mục
+                Pages per Category
               </label>
               <input
                 type="number"
@@ -169,7 +284,7 @@ function Scraper() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Số bài mỗi danh mục
+                Articles per Category
               </label>
               <input
                 type="number"
@@ -192,27 +307,51 @@ function Scraper() {
               {detecting ? (
                 <>
                   <span className="loading loading-spinner loading-sm"></span>
-                  Đang phát hiện...
+                  Detecting...
                 </>
               ) : (
-                '🔍 Phát hiện danh mục'
+                '🔍 Detect Categories'
               )}
             </button>
             <button
               onClick={handleScrape}
-              disabled={loading || detecting || !homepageUrl}
+              disabled={loading || detecting || !homepageUrl || (scrapeMode === 'single' && !selectedCategory)}
               className="btn btn-primary"
             >
               {loading ? (
                 <>
                   <span className="loading loading-spinner loading-sm"></span>
-                  Đang scrape...
+                  Scraping...
                 </>
               ) : (
-                '🚀 Bắt đầu Scrape'
+                scrapeMode === 'single' ? '📂 Scrape Category' : '🚀 Scrape Full Source'
               )}
             </button>
           </div>
+
+          {loading && progress > 0 && (
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">{progressMessage}</span>
+                <span className="text-sm font-medium text-primary">{Math.round(progress)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                <div 
+                  className="bg-primary h-full rounded-full transition-all duration-300 ease-out flex items-center justify-end pr-2"
+                  style={{ width: `${progress}%` }}
+                >
+                  {progress > 10 && (
+                    <span className="text-xs text-white font-semibold">
+                      {Math.round(progress)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                This may take several minutes depending on the number of articles...
+              </p>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -227,14 +366,14 @@ function Scraper() {
         {detectedData && (
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <h2 className="text-xl font-bold mb-4">
-              ✅ Đã phát hiện danh mục từ: {detectedData.source.name}
+              ✅ Categories detected from: {detectedData.source.name}
             </h2>
             <div className="mb-4">
               <p className="text-sm text-gray-600">
                 <strong>Domain:</strong> {detectedData.source.domain}
               </p>
               <p className="text-sm text-gray-600">
-                <strong>Số danh mục:</strong> {detectedData.categories.length}
+                <strong>Total Categories:</strong> {detectedData.categories.length}
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -251,25 +390,25 @@ function Scraper() {
         {scrapeResult && (
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <h2 className="text-xl font-bold mb-4 text-green-600">
-              🎉 Scraping hoàn tất!
+              🎉 Scraping completed!
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="stat bg-base-200 rounded">
-                <div className="stat-title">Tổng bài viết</div>
-                <div className="stat-value text-primary">{scrapeResult.totalArticles || 0}</div>
+                <div className="stat-title">Total Articles</div>
+                <div className="stat-value text-primary">{scrapeResult.articles?.total || scrapeResult.totalArticles || 0}</div>
               </div>
               <div className="stat bg-base-200 rounded">
-                <div className="stat-title">Thành công</div>
-                <div className="stat-value text-success">{scrapeResult.savedArticles || 0}</div>
+                <div className="stat-title">Success</div>
+                <div className="stat-value text-success">{scrapeResult.articles?.success || scrapeResult.savedArticles || 0}</div>
               </div>
               <div className="stat bg-base-200 rounded">
-                <div className="stat-title">Danh mục</div>
-                <div className="stat-value text-secondary">{scrapeResult.categoriesProcessed || 0}</div>
+                <div className="stat-title">Categories</div>
+                <div className="stat-value text-secondary">{scrapeResult.categories?.length || scrapeResult.categoriesProcessed || 0}</div>
               </div>
               <div className="stat bg-base-200 rounded">
-                <div className="stat-title">Thời gian</div>
-                <div className="stat-value text-accent text-2xl">
-                  {scrapeResult.totalTime ? `${Math.round(scrapeResult.totalTime / 1000)}s` : 'N/A'}
+                <div className="stat-title">Failed</div>
+                <div className="stat-value text-error text-2xl">
+                  {scrapeResult.articles?.failed || 0}
                 </div>
               </div>
             </div>
@@ -278,15 +417,15 @@ function Scraper() {
 
         {sources.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold mb-4">Nguồn tin đã thêm ({sources.length})</h2>
+            <h2 className="text-xl font-bold mb-4">Added Sources ({sources.length})</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sources.map((source) => (
                 <div key={source.id} className="border border-gray-200 rounded p-4 hover:shadow-md transition-shadow">
                   <h3 className="font-bold text-lg mb-2">{source.name}</h3>
                   <p className="text-sm text-gray-600 mb-2">{source.domain}</p>
                   <div className="flex justify-between text-xs text-gray-500">
-                    <span>📰 {source.total_articles || 0} bài viết</span>
-                    <span>📂 {source.total_categories || 0} danh mục</span>
+                    <span>📰 {source.total_articles || 0} articles</span>
+                    <span>📂 {source.total_categories || 0} categories</span>
                   </div>
                 </div>
               ))}
@@ -294,6 +433,20 @@ function Scraper() {
           </div>
         )}
       </div>
+
+      {showSuccessModal && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg text-success">✅ Scraping Completed Successfully!</h3>
+            <p className="py-4">The scraping process has finished successfully. All articles have been saved to the database.</p>
+            <div className="modal-action">
+              <button className="btn btn-success" onClick={() => setShowSuccessModal(false)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

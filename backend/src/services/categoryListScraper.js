@@ -75,8 +75,6 @@ const scrapeCategoryPage = async (categoryUrl, options = {}) => {
   let page;
 
   try {
-    console.log(`🔍 Scraping category: ${categoryUrl}`);
-
     browser = await puppeteer.launch(BROWSER_CONFIG);
     page = await browser.newPage();
 
@@ -94,8 +92,6 @@ const scrapeCategoryPage = async (categoryUrl, options = {}) => {
 
     while (currentPage <= maxPages && articleUrls.size < maxArticles) {
       try {
-        console.log(`📄 Loading page ${currentPage}...`);
-
         await page.goto(categoryUrl, {
           waitUntil: 'domcontentloaded',
           timeout: SCRAPER_CONFIG.TIMEOUT
@@ -135,8 +131,6 @@ const scrapeCategoryPage = async (categoryUrl, options = {}) => {
             articleUrls.add(url);
           }
         });
-
-        console.log(`  ✓ Found ${pageUrls.length} links, ${articleUrls.size} valid articles so far`);
 
         const nextPageUrl = await page.evaluate(() => {
           const nextSelectors = [

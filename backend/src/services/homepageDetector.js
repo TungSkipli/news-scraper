@@ -8,6 +8,7 @@ const {
 puppeteer.use(StealthPlugin());
 
 const CATEGORY_NAV_SELECTORS = [
+  'ul.nav > li > a[href]',
   'nav a[href*="/"]',
   '.menu a[href*="/"]',
   '.nav-menu a[href*="/"]',
@@ -17,7 +18,9 @@ const CATEGORY_NAV_SELECTORS = [
   '.header-menu a',
   '.primary-menu a',
   '#menu a',
-  '.site-navigation a'
+  '.site-navigation a',
+  'ul.nav a[href]',
+  '.pin-menu a[href*="/"]'
 ];
 
 const extractDomain = (url) => {
@@ -48,8 +51,6 @@ const detectCategories = async (homepageUrl) => {
   let page;
 
   try {
-    console.log(`🔍 Detecting categories from: ${homepageUrl}`);
-
     browser = await puppeteer.launch(BROWSER_CONFIG);
     page = await browser.newPage();
 
@@ -60,13 +61,12 @@ const detectCategories = async (homepageUrl) => {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     );
 
-    console.log('📄 Loading homepage...');
     await page.goto(homepageUrl, {
       waitUntil: 'domcontentloaded',
-      timeout: SCRAPER_CONFIG.TIMEOUT
+      timeout: 60000
     });
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     const result = await page.evaluate((selectors, baseUrl) => {
       const baseDomain = new URL(baseUrl).origin;
@@ -76,12 +76,18 @@ const detectCategories = async (homepageUrl) => {
       const isValidCategoryUrl = (href, baseUrl) => {
         if (!href || href === '#' || href === '/' || href === baseUrl) return false;
         if (href.includes('javascript:') || href.includes('mailto:')) return false;
-        if (href.match(/\.(jpg|jpeg|png|gif|pdf|doc|zip)$/i)) return false;
+        if (href.match(/\.(jpg|jpeg|png|gif|pdf|doc|zip|html|htm|php|aspx|jsp)$/i)) return false;
 
         try {
           const linkUrl = new URL(href, baseUrl);
           const baseUrlObj = new URL(baseUrl);
-          return linkUrl.hostname === baseUrlObj.hostname;
+          
+          if (linkUrl.hostname !== baseUrlObj.hostname) return false;
+          
+          const pathParts = linkUrl.pathname.split('/').filter(p => p);
+          if (pathParts.length !== 1) return false;
+          
+          return true;
         } catch (e) {
           return false;
         }
@@ -108,6 +114,36 @@ const detectCategories = async (homepageUrl) => {
       };
 
       const categories = new Map();
+
+      const catMenus = document.querySelectorAll('ul.cat-menu');
+      
+      catMenus.forEach(menu => {
+        const menuItems = menu.querySelectorAll(':scope > li');
+        
+        menuItems.forEach(item => {
+          const mainLink = item.querySelector(':scope > a[href]');
+          if (!mainLink) return;
+          
+          const href = mainLink.getAttribute('href');
+          const text = mainLink.getAttribute('title') || mainLink.textContent.trim();
+          
+          if (!href || !text) return;
+          
+          let absoluteUrl;
+          try {
+            absoluteUrl = new URL(href, baseUrl).href;
+          } catch (e) {
+            return;
+          }
+          
+          if (isValidCategoryUrl(absoluteUrl, baseUrl) && !categories.has(absoluteUrl)) {
+            categories.set(absoluteUrl, {
+              name: text,
+              url: absoluteUrl
+            });
+          }
+        });
+      });
 
       for (const selector of selectors) {
         try {
@@ -150,11 +186,11 @@ const detectCategories = async (homepageUrl) => {
     await browser.close();
 
     const categories = result.categories
-      .filter(cat => cat.name.length > 2 && cat.name.length < 30)
+      .filter(cat => cat.name.length > 2 && cat.name.length < 50)
       .filter((cat, index, self) => 
         index === self.findIndex(c => c.name.toLowerCase() === cat.name.toLowerCase())
       )
-      .slice(0, 20);
+      .slice(0, 50);
 
     const domain = extractDomain(homepageUrl);
     const sourceName = extractSourceName(domain, result.pageTitle);

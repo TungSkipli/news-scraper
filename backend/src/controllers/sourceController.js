@@ -2,6 +2,7 @@ const {
   getAllSources,
   getSourceByDomain,
   getCategoriesBySource,
+  getAllCategories,
   getArticles
 } = require('../services/sourceService');
 
@@ -71,8 +72,6 @@ const getArticlesController = async (req, res) => {
   try {
     const { source_id, category_id, limit } = req.query;
     
-    console.log('Fetching articles with filters:', { source_id, category_id, limit });
-    
     const filters = {
       source_id,
       category_id,
@@ -81,15 +80,12 @@ const getArticlesController = async (req, res) => {
     
     const articles = await getArticles(filters);
     
-    console.log(`Found ${articles.length} articles for source_id: ${source_id || 'all'}`);
-    
     res.json({
       success: true,
       data: articles,
       total: articles.length
     });
   } catch (error) {
-    console.error('Error in getArticlesController:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get articles'
@@ -128,10 +124,28 @@ const getArticleController = async (req, res) => {
   }
 };
 
+const getAllCategoriesController = async (req, res) => {
+  try {
+    const categories = await getAllCategories();
+    
+    res.json({
+      success: true,
+      data: categories,
+      total: categories.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get categories'
+    });
+  }
+};
+
 module.exports = {
   getSourcesController,
   getSourceController,
   getSourceCategoriesController,
+  getAllCategoriesController,
   getArticlesController,
   getArticleController
 };

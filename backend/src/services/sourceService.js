@@ -167,6 +167,21 @@ const getCategoriesBySource = async (sourceId) => {
   }
 };
 
+const getAllCategories = async () => {
+  try {
+    const snapshot = await db
+      .collection(COLLECTIONS.CATEGORIES)
+      .get();
+
+    const categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    categories.sort((a, b) => (b.total_articles || 0) - (a.total_articles || 0));
+    
+    return categories;
+  } catch (error) {
+    throw error;
+  }
+};
+
 const getArticles = async (filters = {}) => {
   try {
     let query = db.collection('news').doc('articles').collection('global');
@@ -201,6 +216,7 @@ module.exports = {
   getAllSources,
   getSourceByDomain,
   getCategoriesBySource,
+  getAllCategories,
   getArticles,
   COLLECTIONS
 };

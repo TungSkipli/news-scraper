@@ -1,61 +1,79 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getNews, getTags } from '../../services/newsService';
+import { getArticles, getAllCategories } from '../../services/sourceService';
 import NewsCard from '../../components/shared/NewsCard';
 
 function NewsListPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
-  const [tags, setTags] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   const [search, setSearch] = useState('');
-  const [selectedTag, setSelectedTag] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState(null);
+  const [totalArticles, setTotalArticles] = useState(0);
 
   const limit = 12;
 
   useEffect(() => {
-    fetchTags();
+    fetchCategories();
   }, []);
 
   useEffect(() => {
-    const tagFromUrl = searchParams.get('tag');
-    setSelectedTag(tagFromUrl);
+    const categoryFromUrl = searchParams.get('category');
+    setSelectedCategory(categoryFromUrl || '');
     setCurrentPage(1);
   }, [searchParams]);
 
   useEffect(() => {
-    fetchNews();
-  }, [currentPage, search, selectedTag]);
+    fetchArticles();
+  }, [currentPage, search, selectedCategory]);
 
-  const fetchNews = async () => {
+  const fetchArticles = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await getNews({
-        page: currentPage,
-        limit,
-        search,
-        tag: selectedTag
+      
+      const response = await getArticles({
+        category_id: selectedCategory || undefined,
+        limit: 100
       });
-      setArticles(response.data.articles);
-      setPagination(response.data.pagination);
+
+      if (response.success) {
+        let filteredArticles = response.data;
+
+        if (search) {
+          const searchLower = search.toLowerCase();
+          filteredArticles = filteredArticles.filter(article => 
+            article.title?.toLowerCase().includes(searchLower) ||
+            article.summary?.toLowerCase().includes(searchLower)
+          );
+        }
+
+        setTotalArticles(filteredArticles.length);
+        const startIndex = (currentPage - 1) * limit;
+        const paginatedArticles = filteredArticles.slice(startIndex, startIndex + limit);
+        setArticles(paginatedArticles);
+      }
     } catch (err) {
-      setError(err.message || 'Failed to fetch news');
+      setError(err.message || 'Failed to fetch articles');
+      setArticles([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchTags = async () => {
+  const fetchCategories = async () => {
     try {
-      const response = await getTags();
-      setTags(response.data);
+      const response = await getAllCategories();
+      if (response.success) {
+        setCategories(response.data);
+      }
     } catch (err) {
+      console.error('Failed to fetch categories:', err);
     }
   };
 
@@ -64,9 +82,14 @@ function NewsListPage() {
     setCurrentPage(1);
   };
 
-  const handleTagFilter = (tag) => {
-    setSelectedTag(tag === selectedTag ? '' : tag);
+  const handleCategoryFilter = (categoryId) => {
+    setSelectedCategory(categoryId === selectedCategory ? '' : categoryId);
     setCurrentPage(1);
+    if (categoryId) {
+      navigate(`/news?category=${categoryId}`);
+    } else {
+      navigate('/news');
+    }
   };
 
   const handlePageChange = (page) => {
@@ -75,12 +98,13 @@ function NewsListPage() {
   };
 
   const renderPagination = () => {
-    if (!pagination || pagination.totalPages <= 1) return null;
+    const totalPages = Math.ceil(totalArticles / limit);
+    if (totalPages <= 1) return null;
 
     const pages = [];
     const maxPages = 5;
     let startPage = Math.max(1, currentPage - 2);
-    let endPage = Math.min(pagination.totalPages, startPage + maxPages - 1);
+    let endPage = Math.min(totalPages, startPage + maxPages - 1);
 
     if (endPage - startPage < maxPages - 1) {
       startPage = Math.max(1, endPage - maxPages + 1);
@@ -109,8 +133,8 @@ function NewsListPage() {
         </button>
         {pages}
         <button
-          onClick={() => handlePageChange(pagination.totalPages)}
-          disabled={currentPage === pagination.totalPages}
+          onClick={() => handlePageChange(totalPages)}
+          disabled={currentPage === totalPages}
           className="join-item btn btn-sm"
         >
           »
@@ -138,25 +162,28 @@ function NewsListPage() {
         <div className="flex gap-6">
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <div className="bg-white p-4 rounded sticky top-20">
-              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Topics</h3>
+              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Categories</h3>
               <div className="space-y-1">
                 <button
-                  onClick={() => handleTagFilter('')}
+                  onClick={() => handleCategoryFilter('')}
                   className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
-                    selectedTag === '' ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                    selectedCategory === '' ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
                   }`}
                 >
                   All
                 </button>
-                {tags.map((tag, index) => (
+                {categories.map((category) => (
                   <button
-                    key={index}
-                    onClick={() => handleTagFilter(tag)}
-                    className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
-                      selectedTag === tag ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                    key={category.id}
+                    onClick={() => handleCategoryFilter(category.id)}
+                    className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-[#9f224e] transition-colors ${
+                      selectedCategory === category.id ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
                     }`}
                   >
-                    {tag}
+                    <div className="flex justify-between items-center">
+                      <span>{category.name}</span>
+                      <span className="text-xs text-gray-400">({category.total_articles || 0})</span>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -175,13 +202,15 @@ function NewsListPage() {
           <main className="flex-1 min-w-0">
             <div className="lg:hidden mb-4 bg-white p-3 rounded">
               <select 
-                value={selectedTag}
-                onChange={(e) => handleTagFilter(e.target.value)}
+                value={selectedCategory}
+                onChange={(e) => handleCategoryFilter(e.target.value)}
                 className="select select-bordered select-sm w-full"
               >
-                <option value="">All Topics</option>
-                {tags.map((tag, index) => (
-                  <option key={index} value={tag}>{tag}</option>
+                <option value="">All Categories</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name} ({category.total_articles || 0})
+                  </option>
                 ))}
               </select>
             </div>
@@ -246,7 +275,7 @@ function NewsListPage() {
                   ))}
                 </div>
 
-                {pagination && pagination.totalPages > 1 && (
+                {totalArticles > limit && (
                   <div className="flex justify-center mt-6">
                     {renderPagination()}
                   </div>
