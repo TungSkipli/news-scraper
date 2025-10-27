@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getArticles, getAllCategories, getAllSources } from '../../services/sourceService';
-import NewsCard from '../../components/shared/NewsCard';
 
 function NewsListPage() {
   const navigate = useNavigate();

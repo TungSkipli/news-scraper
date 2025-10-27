@@ -215,17 +215,11 @@ const extractArticleData = async (page, url) => {
   }, { selectors: UNIVERSAL_SELECTORS, url });
 };
 
-/**
- * Create and setup browser with proxy authentication
- */
 const createBrowser = async () => {
   const browser = await puppeteer.launch(BROWSER_CONFIG);
   return browser;
 };
 
-/**
- * Setup page with proxy authentication
- */
 const setupPage = async (browser, url) => {
   const page = await browser.newPage();
   
@@ -258,9 +252,6 @@ const setupPage = async (browser, url) => {
   return page;
 };
 
-/**
- * Parse date string to timestamp
- */
 const parseDate = (dateString) => {
   if (!dateString) return Date.now();
 
@@ -275,9 +266,6 @@ const parseDate = (dateString) => {
   return Date.now();
 };
 
-/**
- * Scrape single URL with retry mechanism
- */
 const scrapeUrl = async (url, retryCount = 0) => {
   let browser;
   let page;
@@ -346,9 +334,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
   }
 };
 
-/**
- * Scrape and save to Firebase
- */
 const scrapeAndSave = async (url) => {
   try {
     const article = await scrapeUrl(url);

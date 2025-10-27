@@ -63,7 +63,6 @@ function Navigation() {
             NewsHub
           </Link>
 
-          {/* Source Filter Dropdown */}
           <div className="hidden md:block mx-4">
             <select 
               value={currentSourceId || ''} 

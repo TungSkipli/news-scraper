@@ -121,9 +121,6 @@ const scrapeEntireSource = async (homepageUrl, options = {}) => {
   }
 };
 
-/**
- * Scrape single category
- */
 const scrapeSingleCategory = async (categoryUrl, sourceData, options = {}) => {
   const {
     maxPages = 2,

@@ -80,8 +80,7 @@ function SourcePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#9f224e] to-[#c82e5f] text-white py-8">
+  <div className="bg-gradient-to-r from-[#9f224e] to-[#c82e5f] text-white py-8">
         <div className="container mx-auto px-4 max-w-7xl">
           <h1 className="text-4xl font-bold mb-2">{source.name}</h1>
           <p className="text-white/80 mb-4">{source.domain}</p>

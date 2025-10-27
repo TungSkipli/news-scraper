@@ -161,8 +161,7 @@ function Scraper() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+  <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Multi-Source News Scraper
           </h1>
@@ -171,8 +170,7 @@ function Scraper() {
           </p>
         </div>
 
-        {/* Input Section */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+  <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h2 className="text-xl font-bold mb-4">Thêm nguồn mới</h2>
 
           <div className="mb-4">
