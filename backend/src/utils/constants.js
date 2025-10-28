@@ -135,17 +135,103 @@ const UNIVERSAL_SELECTORS = {
   ]
 };
 
+const CATEGORY_MAPPING = {
+  'giáo dục': 'education',
+  'giao duc': 'education',
+  'education': 'education',
+  'học tập': 'education',
+  'hoc tap': 'education',
+  
+  'xã hội': 'society',
+  'xa hoi': 'society',
+  'society': 'society',
+  'đời sống': 'society',
+  'doi song': 'society',
+  
+  'giải trí': 'entertainment',
+  'giai tri': 'entertainment',
+  'entertainment': 'entertainment',
+  'nghệ thuật': 'entertainment',
+  'nghe thuat': 'entertainment',
+  'văn hóa': 'entertainment',
+  'van hoa': 'entertainment',
+  
+  'thể thao': 'sports',
+  'the thao': 'sports',
+  'sports': 'sports',
+  'bóng đá': 'sports',
+  'bong da': 'sports',
+  
+  'kinh doanh': 'business',
+  'kinh tế': 'business',
+  'kinh te': 'business',
+  'business': 'business',
+  'economy': 'business',
+  
+  'công nghệ': 'technology',
+  'cong nghe': 'technology',
+  'technology': 'technology',
+  'tech': 'technology',
+  'khoa học': 'technology',
+  'khoa hoc': 'technology',
+  'science': 'technology',
+  
+  'sức khỏe': 'health',
+  'suc khoe': 'health',
+  'health': 'health',
+  'y tế': 'health',
+  'y te': 'health',
+  
+  'pháp luật': 'law',
+  'phap luat': 'law',
+  'law': 'law',
+  'legal': 'law',
+  
+  'du lịch': 'travel',
+  'du lich': 'travel',
+  'travel': 'travel',
+  'tourism': 'travel',
+  
+  'ô tô': 'automotive',
+  'o to': 'automotive',
+  'automotive': 'automotive',
+  'xe': 'automotive',
+  
+  'thời sự': 'news',
+  'thoi su': 'news',
+  'tin tức': 'news',
+  'tin tuc': 'news',
+  'news': 'news',
+  
+  'chính trị': 'politics',
+  'chinh tri': 'politics',
+  'politics': 'politics',
+  
+  'thế giới': 'world',
+  'the gioi': 'world',
+  'world': 'world',
+  'quốc tế': 'world',
+  'quoc te': 'world',
+  'international': 'world'
+};
+
+const normalizeCategory = (category) => {
+  if (!category) return 'general';
+  
+  const normalized = category.toLowerCase().trim();
+  
+  return CATEGORY_MAPPING[normalized] || 'general';
+};
+
 const FIREBASE_COLLECTIONS = {
   NEWS: 'news',
   ARTICLES: 'articles',
-  TECH: 'tech',
-  GLOBAL: 'global'
+  CATEGORY: 'category'
 };
 
 const DEFAULT_VALUES = {
   AUTHORS: 'Unknown',
-  CATEGORY_SLUG: 'tech',
-  STATE: 'global',
+  CATEGORY: 'general',
   LIKES: 0,
   IMAGE_CAPTION: '',
   TAGS: []
@@ -157,5 +243,7 @@ module.exports = {
   BROWSER_CONFIG,
   UNIVERSAL_SELECTORS,
   FIREBASE_COLLECTIONS,
-  DEFAULT_VALUES
+  DEFAULT_VALUES,
+  CATEGORY_MAPPING,
+  normalizeCategory
 };

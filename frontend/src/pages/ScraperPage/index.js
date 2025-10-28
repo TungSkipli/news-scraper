@@ -21,13 +21,11 @@ function Scraper() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const presetSources = [
-    'https://vvnm.vietbao.com/',
+    'https://vnexpress.net/',
     'https://ngoisao.vnexpress.net/',
     'https://afamily.vn/',
-    'https://rangdongatlanta.com/',
+    'https://thanhnien.vn/',
     'https://tinnuocmy.asia/',
-    'https://nguoi-viet.com/',
-    'https://saigonnhonews.com/'
   ];
 
   useEffect(() => {

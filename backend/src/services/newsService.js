@@ -1,114 +1,170 @@
 const { db } = require('../config/firebase');
-const { FIREBASE_COLLECTIONS } = require('../utils/constants');
+const { FIREBASE_COLLECTIONS, normalizeCategory } = require('../utils/constants');
 
-const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '' }) => {
+const getAllArticlesFromAllCategories = async (category = null) => {
   try {
-    let query = db.collection(FIREBASE_COLLECTIONS.NEWS)
+    const categoryRef = db.collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL);
+      .collection(FIREBASE_COLLECTIONS.CATEGORY);
+    
+    let articles = [];
 
-    if (tag) {
-      query = query.where('tags', 'array-contains', tag);
+    if (category) {
+      const normalizedCategory = normalizeCategory(category);
+      const itemsSnapshot = await categoryRef
+        .doc(normalizedCategory)
+        .collection('items')
+        .get();
       
-      const snapshot = await query.get();
-      let articles = snapshot.docs.map(doc => ({
+      articles = itemsSnapshot.docs.map(doc => ({
         id: doc.id,
+        category: normalizedCategory,
         ...doc.data()
       }));
-
-      articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
-
-      if (search) {
-        const searchLower = search.toLowerCase();
-        articles = articles.filter(article => 
-          article.title?.toLowerCase().includes(searchLower) ||
-          article.summary?.toLowerCase().includes(searchLower) ||
-          article.content?.toLowerCase().includes(searchLower)
-        );
-      }
-
-      const total = articles.length;
-      const totalPages = Math.ceil(total / limit);
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedArticles = articles.slice(startIndex, endIndex);
-
-      return {
-        articles: paginatedArticles,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages
-        }
-      };
     } else {
-      query = query.orderBy('published_at', 'desc');
+      const categoriesSnapshot = await categoryRef.get();
+      
+      for (const categoryDoc of categoriesSnapshot.docs) {
+        const itemsSnapshot = await categoryRef
+          .doc(categoryDoc.id)
+          .collection('items')
+          .get();
+        
+        const categoryArticles = itemsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          category: categoryDoc.id,
+          ...doc.data()
+        }));
+        
+        articles = articles.concat(categoryArticles);
+      }
+    }
 
-      const snapshot = await query.get();
-      let articles = snapshot.docs.map(doc => ({
+    if (articles.length === 0) {
+      const legacySnapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+        .doc(FIREBASE_COLLECTIONS.ARTICLES)
+        .collection('global')
+        .get();
+      
+      articles = legacySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-
-      if (search) {
-        const searchLower = search.toLowerCase();
-        articles = articles.filter(article => 
-          article.title?.toLowerCase().includes(searchLower) ||
-          article.summary?.toLowerCase().includes(searchLower) ||
-          article.content?.toLowerCase().includes(searchLower)
-        );
-      }
-
-      const total = articles.length;
-      const totalPages = Math.ceil(total / limit);
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedArticles = articles.slice(startIndex, endIndex);
-
-      return {
-        articles: paginatedArticles,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages
-        }
-      };
     }
+
+    return articles;
   } catch (error) {
+    console.error('[getAllArticlesFromAllCategories] Error:', error);
     throw error;
   }
 };
 
-const getNewsById = async (id) => {
+const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '', category = '' }) => {
   try {
-    const doc = await db.collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL)
-      .doc(id)
-      .get();
-    
-    if (!doc.exists) {
-      return null;
+    let articles = await getAllArticlesFromAllCategories(category || null);
+
+    if (tag) {
+      articles = articles.filter(article => 
+        article.tags && Array.isArray(article.tags) && article.tags.includes(tag)
+      );
     }
 
+    if (search) {
+      const searchLower = search.toLowerCase();
+      articles = articles.filter(article => 
+        article.title?.toLowerCase().includes(searchLower) ||
+        article.summary?.toLowerCase().includes(searchLower) ||
+        article.content?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
+
+    const total = articles.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedArticles = articles.slice(startIndex, endIndex);
+
     return {
-      id: doc.id,
-      ...doc.data()
+      articles: paginatedArticles,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages
+      }
     };
   } catch (error) {
     throw error;
   }
 };
 
+const getNewsById = async (id, category = null) => {
+  try {
+    const categoryRef = db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(FIREBASE_COLLECTIONS.CATEGORY);
+
+    if (category) {
+      const normalizedCategory = normalizeCategory(category);
+      const doc = await categoryRef
+        .doc(normalizedCategory)
+        .collection('items')
+        .doc(id)
+        .get();
+      
+      if (doc.exists) {
+        return {
+          id: doc.id,
+          category: normalizedCategory,
+          ...doc.data()
+        };
+      }
+      return null;
+    }
+
+    const categoriesSnapshot = await categoryRef.get();
+    
+    for (const categoryDoc of categoriesSnapshot.docs) {
+      const doc = await categoryRef
+        .doc(categoryDoc.id)
+        .collection('items')
+        .doc(id)
+        .get();
+      
+      if (doc.exists) {
+        return {
+          id: doc.id,
+          category: categoryDoc.id,
+          ...doc.data()
+        };
+      }
+    }
+
+    const legacyDoc = await db.collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection('global')
+      .doc(id)
+      .get();
+    
+    if (legacyDoc.exists) {
+      return {
+        id: legacyDoc.id,
+        ...legacyDoc.data()
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[getNewsById] Error:', error);
+    throw error;
+  }
+};
+
 const getStats = async () => {
   try {
-    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL)
-      .get();
-    const articles = snapshot.docs.map(doc => doc.data());
+    const articles = await getAllArticlesFromAllCategories();
 
     const now = Date.now();
     const oneDayAgo = now - (24 * 60 * 60 * 1000);
@@ -161,11 +217,7 @@ const getStats = async () => {
 
 const getAllTags = async () => {
   try {
-    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL)
-      .get();
-    const articles = snapshot.docs.map(doc => doc.data());
+    const articles = await getAllArticlesFromAllCategories();
 
     const tagsSet = new Set();
     articles.forEach(article => {
@@ -182,19 +234,11 @@ const getAllTags = async () => {
 
 const getFeaturedNews = async ({ limit = 6 }) => {
   try {
-    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL)
-      .orderBy('published_at', 'desc')
-      .limit(limit)
-      .get();
+    const articles = await getAllArticlesFromAllCategories();
+    
+    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
 
-    const articles = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    return articles;
+    return articles.slice(0, limit);
   } catch (error) {
     throw error;
   }
@@ -202,19 +246,11 @@ const getFeaturedNews = async ({ limit = 6 }) => {
 
 const getLatestNews = async ({ limit = 10 }) => {
   try {
-    const snapshot = await db.collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL)
-      .orderBy('published_at', 'desc')
-      .limit(limit)
-      .get();
+    const articles = await getAllArticlesFromAllCategories();
+    
+    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
 
-    const articles = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    return articles;
+    return articles.slice(0, limit);
   } catch (error) {
     throw error;
   }

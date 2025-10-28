@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getArticles, getSourceById } from '../../services/sourceService';
+import { getArticles, getSourceById, getArticlesBySourceAndCategory } from '../../services/sourceService';
 import NewsCard from '../../components/shared/NewsCard';
 
 function CategoryPage() {
@@ -18,23 +18,34 @@ function CategoryPage() {
     try {
       setLoading(true);
       
-      const [articlesRes, sourceRes] = await Promise.all([
-        getArticles({ 
-          source_id: sourceId, 
+      let articlesRes;
+      
+      if (sourceId && categoryId) {
+        articlesRes = await getArticlesBySourceAndCategory(sourceId, categoryId, 50);
+      } else if (categoryId) {
+        articlesRes = await getArticles({ 
           category_id: categoryId,
           limit: 50 
-        }),
-        getSourceById(sourceId)
-      ]);
+        });
+      } else if (sourceId) {
+        articlesRes = await getArticles({ 
+          source_id: sourceId,
+          limit: 50 
+        });
+      }
 
-      if (articlesRes.success) {
+      if (articlesRes && articlesRes.success) {
         setArticles(articlesRes.data);
       }
 
-      if (sourceRes.success) {
-        setSource(sourceRes.data);
+      if (sourceId) {
+        const sourceRes = await getSourceById(sourceId);
+        if (sourceRes.success) {
+          setSource(sourceRes.data);
+        }
       }
     } catch (error) {
+      console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }

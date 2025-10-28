@@ -36,6 +36,23 @@ export const getArticleById = async (id) => {
   return response.data;
 };
 
+export const getUniqueCategoriesList = async () => {
+  const response = await axios.get(`${API_URL}/api/articles/categories`);
+  return response.data;
+};
+
+export const getCategoriesCountBySource = async (sourceId) => {
+  const response = await axios.get(`${API_URL}/api/sources/${sourceId}/articles-categories`);
+  return response.data;
+};
+
+export const getArticlesBySourceAndCategory = async (sourceId, categoryId, limit = 50) => {
+  const response = await axios.get(`${API_URL}/api/sources/${sourceId}/categories/${categoryId}/articles`, {
+    params: { limit }
+  });
+  return response.data;
+};
+
 export const detectCategories = async (homepageUrl) => {
   const response = await axios.post(`${API_URL}/detect-categories`, {
     url: homepageUrl

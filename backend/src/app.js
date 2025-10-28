@@ -30,6 +30,43 @@ app.use('/', scrapeRoutes);
 app.use('/', newsRoutes);
 app.use('/api', sourceRoutes);
 
+app.get('/api/test-db', async (req, res) => {
+    try {
+        const { db } = require('./config/firebase');
+        
+        const globalSnapshot = await db.collection('news')
+            .doc('articles')
+            .collection('global')
+            .limit(5)
+            .get();
+        
+        const categoryRef = db.collection('news')
+            .doc('articles')
+            .collection('category');
+        
+        const categoriesSnapshot = await categoryRef.get();
+        
+        const result = {
+            global: {
+                count: globalSnapshot.size,
+                empty: globalSnapshot.empty,
+                articles: globalSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    title: doc.data().title
+                }))
+            },
+            categories: {
+                count: categoriesSnapshot.size,
+                empty: categoriesSnapshot.empty,
+                list: categoriesSnapshot.docs.map(doc => doc.id)
+            }
+        };
+        
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 app.use((req, res) => {
     res.status(404).json({

@@ -2,13 +2,14 @@ const { getAllNews, getNewsById, getStats, getAllTags, getFeaturedNews, getLates
 
 const getNews = async (req, res, next) => {
   try {
-    const { page, limit, search, tag } = req.query;
+    const { page, limit, search, tag, category } = req.query;
     
     const result = await getAllNews({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 12,
       search: search || '',
-      tag: tag || ''
+      tag: tag || '',
+      category: category || ''
     });
 
     res.json({
@@ -16,6 +17,7 @@ const getNews = async (req, res, next) => {
       data: result
     });
   } catch (error) {
+    console.error('[getNews] Error:', error);
     next(error);
   }
 };
@@ -37,6 +39,7 @@ const getNewsDetail = async (req, res, next) => {
       data: article
     });
   } catch (error) {
+    console.error('[getNewsDetail] Error:', error);
     next(error);
   }
 };

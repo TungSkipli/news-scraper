@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getArticles, getAllCategories, getAllSources } from '../../services/sourceService';
+import { getArticles, getAllCategories, getAllSources, getUniqueCategoriesList, getCategoriesCountBySource } from '../../services/sourceService';
 
 function NewsListPage() {
   const navigate = useNavigate();
@@ -13,15 +13,19 @@ function NewsListPage() {
   
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSource, setSelectedSource] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
 
   const limit = 12;
 
   useEffect(() => {
-    fetchCategories();
     fetchSources();
   }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [selectedSource]);
 
   useEffect(() => {
     const categoryFromUrl = searchParams.get('category');
@@ -31,17 +35,18 @@ function NewsListPage() {
 
   useEffect(() => {
     fetchArticles();
-  }, [currentPage, search, selectedCategory]);
+  }, [currentPage, search, selectedCategory, selectedSource]);
 
   const fetchArticles = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await getArticles({
-        category_id: selectedCategory || undefined,
-        limit: 100
-      });
+      const params = { limit: 100 };
+      if (selectedCategory) params.category_id = selectedCategory;
+      if (selectedSource) params.source_id = selectedSource;
+      
+      const response = await getArticles(params);
 
       if (response.success) {
         let filteredArticles = response.data;
@@ -69,11 +74,19 @@ function NewsListPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await getAllCategories();
-      if (response.success) {
-        setCategories(response.data);
+      if (selectedSource) {
+        const response = await getCategoriesCountBySource(selectedSource);
+        if (response.success) {
+          setCategories(response.data);
+        }
+      } else {
+        const response = await getUniqueCategoriesList();
+        if (response.success) {
+          setCategories(response.data);
+        }
       }
     } catch (err) {
+      console.error('Failed to fetch categories:', err);
     }
   };
 
@@ -100,6 +113,12 @@ function NewsListPage() {
     } else {
       navigate('/news');
     }
+  };
+
+  const handleSourceFilter = (sourceId) => {
+    setSelectedSource(sourceId);
+    setSelectedCategory('');
+    setCurrentPage(1);
   };
 
   const handlePageChange = (page) => {
@@ -185,7 +204,25 @@ function NewsListPage() {
         <div className="flex gap-6">
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <div className="bg-white p-4 rounded sticky top-20">
-              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Categories</h3>
+              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Filter by Source</h3>
+              <div className="mb-4">
+                <select 
+                  value={selectedSource}
+                  onChange={(e) => handleSourceFilter(e.target.value)}
+                  className="select select-bordered select-sm w-full"
+                >
+                  <option value="">All Sources</option>
+                  {sources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <h3 className="font-bold text-sm mb-3 pb-2 border-b">
+                {selectedSource ? `Categories from ${sources.find(s => s.id === selectedSource)?.name || 'source'}` : 'Categories (all sources)'}
+              </h3>
               <div className="space-y-2">
                 <button
                   onClick={() => handleCategoryFilter('')}
@@ -196,26 +233,25 @@ function NewsListPage() {
                   All
                 </button>
                 
-                {Object.values(groupCategoriesBySource()).map(({ source, categories: sourceCategories }) => (
-                  <div key={source.id} className="space-y-1">
-                    <div className="font-semibold text-xs text-gray-700 px-3 py-2">
-                      {source.name}
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => handleCategoryFilter(category.id)}
+                    className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
+                      selectedCategory === category.id ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span>{category.name}</span>
+                      {selectedSource ? (
+                        <span className="text-xs text-gray-400">({category.article_count || 0})</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">
+                          ({category.total_articles || 0} from {category.sources?.length || 0} sources)
+                        </span>
+                      )}
                     </div>
-                    {sourceCategories.map((category) => (
-                      <button
-                        key={category.id}
-                        onClick={() => handleCategoryFilter(category.id)}
-                        className={`w-full text-left pl-6 pr-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
-                          selectedCategory === category.id ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span>{category.name}</span>
-                          <span className="text-xs text-gray-400">({category.total_articles || 0})</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  </button>
                 ))}
               </div>
 
@@ -231,16 +267,31 @@ function NewsListPage() {
           </aside>
 
           <main className="flex-1 min-w-0">
-            <div className="lg:hidden mb-4 bg-white p-3 rounded">
+            <div className="lg:hidden mb-4 bg-white p-3 rounded space-y-2">
+              <select 
+                value={selectedSource}
+                onChange={(e) => handleSourceFilter(e.target.value)}
+                className="select select-bordered select-sm w-full"
+              >
+                <option value="">All Sources</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+              
               <select 
                 value={selectedCategory}
                 onChange={(e) => handleCategoryFilter(e.target.value)}
                 className="select select-bordered select-sm w-full"
               >
-                <option value="">All Categories</option>
+                <option value="">
+                  {selectedSource ? 'All Categories from Source' : 'All Categories'}
+                </option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
-                    {category.name} ({category.total_articles || 0})
+                    {category.name} ({selectedSource ? category.article_count : category.total_articles || 0})
                   </option>
                 ))}
               </select>

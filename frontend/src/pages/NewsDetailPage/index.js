@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getNewsById } from '../../services/newsService';
+import { getArticleById } from '../../services/sourceService';
 
 function NewsDetailPage() {
   const { id } = useParams();
@@ -17,8 +17,12 @@ function NewsDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await getNewsById(id);
-      setArticle(response.data);
+      const response = await getArticleById(id);
+      if (response.success) {
+        setArticle(response.data);
+      } else {
+        setError(response.message || 'Failed to fetch article');
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to fetch article');
     } finally {

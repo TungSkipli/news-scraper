@@ -7,7 +7,8 @@ const {
   BROWSER_CONFIG,
   UNIVERSAL_SELECTORS,
   FIREBASE_COLLECTIONS,
-  DEFAULT_VALUES
+  DEFAULT_VALUES,
+  normalizeCategory
 } = require('../utils/constants');
 const { trySelectors } = require('../utils/selectorHelpers');
 const { createSlug: generateSlug } = require('../utils/slugGenerator');
@@ -214,6 +215,24 @@ const parseDate = (dateString) => {
   return Date.now();
 };
 
+const extractCategoryFromUrl = (url) => {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
+    
+    for (const part of pathParts) {
+      const normalized = normalizeCategory(part);
+      if (normalized !== 'general') {
+        return normalized;
+      }
+    }
+    
+    return 'general';
+  } catch (e) {
+    return 'general';
+  }
+};
+
 const scrapeUrl = async (url, retryCount = 0) => {
   let browser;
   let page;
@@ -246,6 +265,8 @@ const scrapeUrl = async (url, retryCount = 0) => {
       throw new Error('Could not extract title from the page');
     }
 
+    const category = extractCategoryFromUrl(url);
+
     const article = {
       title: rawData.title,
       summary: rawData.summary || rawData.content?.substring(0, 200) || DEFAULT_VALUES.AUTHORS,
@@ -258,11 +279,11 @@ const scrapeUrl = async (url, retryCount = 0) => {
       tags: Array.isArray(rawData.tags) && rawData.tags.length > 0 
         ? rawData.tags 
         : DEFAULT_VALUES.TAGS,
-      category_slug: DEFAULT_VALUES.CATEGORY_SLUG,
+      category: category,
       external_source: url,
-      created_at: parseDate(rawData.publishedDate),
+      published_at: parseDate(rawData.publishedDate),
+      created_at: Date.now(),
       slug: createSlug(rawData.title),
-      state: DEFAULT_VALUES.STATE,
       likes: DEFAULT_VALUES.LIKES
     };
 
@@ -289,7 +310,9 @@ const scrapeAndSave = async (url) => {
     const docRef = await db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(FIREBASE_COLLECTIONS.GLOBAL)
+      .collection(FIREBASE_COLLECTIONS.CATEGORY)
+      .doc(article.category)
+      .collection('items')
       .add(article);
 
     return {
