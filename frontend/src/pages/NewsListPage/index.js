@@ -1,31 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getArticles, getAllCategories, getAllSources, getUniqueCategoriesList, getCategoriesCountBySource } from '../../services/sourceService';
+import { getNews, getCategories, getStats } from '../../services/newsService';
 
 function NewsListPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedSource, setSelectedSource] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
 
   const limit = 12;
 
   useEffect(() => {
-    fetchSources();
-  }, []);
-
-  useEffect(() => {
     fetchCategories();
-  }, [selectedSource]);
+  }, []);
 
   useEffect(() => {
     const categoryFromUrl = searchParams.get('category');
@@ -35,34 +29,25 @@ function NewsListPage() {
 
   useEffect(() => {
     fetchArticles();
-  }, [currentPage, search, selectedCategory, selectedSource]);
+  }, [currentPage, search, selectedCategory]);
 
   const fetchArticles = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const params = { limit: 100 };
-      if (selectedCategory) params.category_id = selectedCategory;
-      if (selectedSource) params.source_id = selectedSource;
+      const params = { 
+        page: currentPage,
+        limit: limit,
+        search: search || '',
+        category: selectedCategory || ''
+      };
       
-      const response = await getArticles(params);
+      const response = await getNews(params);
 
       if (response.success) {
-        let filteredArticles = response.data;
-
-        if (search) {
-          const searchLower = search.toLowerCase();
-          filteredArticles = filteredArticles.filter(article => 
-            article.title?.toLowerCase().includes(searchLower) ||
-            article.summary?.toLowerCase().includes(searchLower)
-          );
-        }
-
-        setTotalArticles(filteredArticles.length);
-        const startIndex = (currentPage - 1) * limit;
-        const paginatedArticles = filteredArticles.slice(startIndex, startIndex + limit);
-        setArticles(paginatedArticles);
+        setArticles(response.data.articles || []);
+        setTotalArticles(response.data.pagination?.total || 0);
       }
     } catch (err) {
       setError(err.message || 'Failed to fetch articles');
@@ -74,29 +59,12 @@ function NewsListPage() {
 
   const fetchCategories = async () => {
     try {
-      if (selectedSource) {
-        const response = await getCategoriesCountBySource(selectedSource);
-        if (response.success) {
-          setCategories(response.data);
-        }
-      } else {
-        const response = await getUniqueCategoriesList();
-        if (response.success) {
-          setCategories(response.data);
-        }
+      const response = await getCategories();
+      if (response.success && response.data) {
+        setCategories(response.data);
       }
     } catch (err) {
       console.error('Failed to fetch categories:', err);
-    }
-  };
-
-  const fetchSources = async () => {
-    try {
-      const response = await getAllSources();
-      if (response.success) {
-        setSources(response.data);
-      }
-    } catch (err) {
     }
   };
 
@@ -105,20 +73,14 @@ function NewsListPage() {
     setCurrentPage(1);
   };
 
-  const handleCategoryFilter = (categoryId) => {
-    setSelectedCategory(categoryId === selectedCategory ? '' : categoryId);
+  const handleCategoryFilter = (categoryName) => {
+    setSelectedCategory(categoryName === selectedCategory ? '' : categoryName);
     setCurrentPage(1);
-    if (categoryId) {
-      navigate(`/news?category=${categoryId}`);
+    if (categoryName) {
+      navigate(`/news?category=${categoryName}`);
     } else {
       navigate('/news');
     }
-  };
-
-  const handleSourceFilter = (sourceId) => {
-    setSelectedSource(sourceId);
-    setSelectedCategory('');
-    setCurrentPage(1);
   };
 
   const handlePageChange = (page) => {
@@ -126,18 +88,7 @@ function NewsListPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const groupCategoriesBySource = () => {
-    const grouped = {};
-    
-    sources.forEach(source => {
-      grouped[source.id] = {
-        source: source,
-        categories: categories.filter(cat => cat.source_id === source.id)
-      };
-    });
-    
-    return grouped;
-  };
+
 
   const renderPagination = () => {
     const totalPages = Math.ceil(totalArticles / limit);
@@ -204,25 +155,7 @@ function NewsListPage() {
         <div className="flex gap-6">
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <div className="bg-white p-4 rounded sticky top-20">
-              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Filter by Source</h3>
-              <div className="mb-4">
-                <select 
-                  value={selectedSource}
-                  onChange={(e) => handleSourceFilter(e.target.value)}
-                  className="select select-bordered select-sm w-full"
-                >
-                  <option value="">All Sources</option>
-                  {sources.map((source) => (
-                    <option key={source.id} value={source.id}>
-                      {source.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <h3 className="font-bold text-sm mb-3 pb-2 border-b">
-                {selectedSource ? `Categories from ${sources.find(s => s.id === selectedSource)?.name || 'source'}` : 'Categories (all sources)'}
-              </h3>
+              <h3 className="font-bold text-sm mb-3 pb-2 border-b">Categories</h3>
               <div className="space-y-2">
                 <button
                   onClick={() => handleCategoryFilter('')}
@@ -230,26 +163,22 @@ function NewsListPage() {
                     selectedCategory === '' ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
                   }`}
                 >
-                  All
+                  All Categories
                 </button>
                 
-                {categories.map((category) => (
+                {categories.map((category, index) => (
                   <button
-                    key={category.id}
-                    onClick={() => handleCategoryFilter(category.id)}
+                    key={category.category || index}
+                    onClick={() => handleCategoryFilter(category.category)}
                     className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-50 transition-colors ${
-                      selectedCategory === category.id ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
+                      selectedCategory === category.category ? 'bg-[#9f224e] text-white hover:bg-[#9f224e]' : ''
                     }`}
                   >
                     <div className="flex justify-between items-center">
-                      <span>{category.name}</span>
-                      {selectedSource ? (
-                        <span className="text-xs text-gray-400">({category.article_count || 0})</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">
-                          ({category.total_articles || 0} from {category.sources?.length || 0} sources)
-                        </span>
-                      )}
+                      <span className="capitalize">{category.category}</span>
+                      <span className="text-xs text-gray-400">
+                        ({category.count || 0})
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -269,29 +198,14 @@ function NewsListPage() {
           <main className="flex-1 min-w-0">
             <div className="lg:hidden mb-4 bg-white p-3 rounded space-y-2">
               <select 
-                value={selectedSource}
-                onChange={(e) => handleSourceFilter(e.target.value)}
-                className="select select-bordered select-sm w-full"
-              >
-                <option value="">All Sources</option>
-                {sources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.name}
-                  </option>
-                ))}
-              </select>
-              
-              <select 
                 value={selectedCategory}
                 onChange={(e) => handleCategoryFilter(e.target.value)}
                 className="select select-bordered select-sm w-full"
               >
-                <option value="">
-                  {selectedSource ? 'All Categories from Source' : 'All Categories'}
-                </option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name} ({selectedSource ? category.article_count : category.total_articles || 0})
+                <option value="">All Categories</option>
+                {categories.map((category, index) => (
+                  <option key={category.category || index} value={category.category}>
+                    {category.category} ({category.count || 0})
                   </option>
                 ))}
               </select>

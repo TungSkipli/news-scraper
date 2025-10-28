@@ -24,6 +24,7 @@ const scrapeEntireSource = async (homepageUrl, options = {}) => {
       total: 0,
       success: 0,
       failed: 0,
+      duplicates: 0,
       details: []
     }
   };
@@ -67,15 +68,30 @@ const scrapeEntireSource = async (homepageUrl, options = {}) => {
             const savedArticle = await saveArticle(articleData, source, category);
             
             results.articles.total++;
-            results.articles.success++;
-            totalArticlesScraped++;
             
-            results.articles.details.push({
-              url: articleUrl,
-              title: articleData.title,
-              category: category.name,
-              status: 'success'
-            });
+            if (savedArticle.isDuplicate) {
+              results.articles.duplicates++;
+              console.log(`[scrapeEntireSource] ⚠️  Duplicate skipped: ${articleUrl}`);
+              
+              results.articles.details.push({
+                url: articleUrl,
+                title: articleData.title,
+                category: category.name,
+                status: 'duplicate',
+                isDuplicate: true
+              });
+            } else {
+              results.articles.success++;
+              totalArticlesScraped++;
+              
+              results.articles.details.push({
+                url: articleUrl,
+                title: articleData.title,
+                category: category.name,
+                status: 'success',
+                isDuplicate: false
+              });
+            }
 
             if (totalArticlesScraped >= maxArticlesPerSource) {
               break;
@@ -151,17 +167,23 @@ const scrapeSingleCategory = async (categoryUrl, sourceData, options = {}) => {
       articles: {
         total: 0,
         success: 0,
-        failed: 0
+        failed: 0,
+        duplicates: 0
       }
     };
 
     for (const articleUrl of articleUrls) {
       try {
         const articleData = await scrapeUrl(articleUrl);
-        await saveArticle(articleData, source, category);
+        const savedArticle = await saveArticle(articleData, source, category);
         
         results.articles.total++;
-        results.articles.success++;
+        
+        if (savedArticle.isDuplicate) {
+          results.articles.duplicates++;
+        } else {
+          results.articles.success++;
+        }
       } catch (error) {
         results.articles.total++;
         results.articles.failed++;

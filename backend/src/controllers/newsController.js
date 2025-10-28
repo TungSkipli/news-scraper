@@ -1,5 +1,18 @@
-const { getAllNews, getNewsById, getStats, getAllTags, getFeaturedNews, getLatestNews } = require('../services/newsService');
+const { 
+  getAllNews, 
+  getNewsById, 
+  getStats, 
+  getAllTags, 
+  getFeaturedNews, 
+  getLatestNews,
+  getNewsByCategory,
+  getCategoriesWithCounts 
+} = require('../services/newsService');
 
+/**
+ * Get all news with pagination and filters
+ * Query params: page, limit, search, tag, category
+ */
 const getNews = async (req, res, next) => {
   try {
     const { page, limit, search, tag, category } = req.query;
@@ -22,10 +35,38 @@ const getNews = async (req, res, next) => {
   }
 };
 
+/**
+ * Get news by category
+ * Route: /news/category/:category
+ */
+const getNewsByCategoryController = async (req, res, next) => {
+  try {
+    const { category } = req.params;
+    const { page, limit } = req.query;
+    
+    const result = await getNewsByCategory(category, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 12
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('[getNewsByCategoryController] Error:', error);
+    next(error);
+  }
+};
+
+/**
+ * Get single news article by ID
+ * Route: /news/:id or /news/:category/:id
+ */
 const getNewsDetail = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const article = await getNewsById(id);
+    const { id, category } = req.params;
+    const article = await getNewsById(id, category);
 
     if (!article) {
       return res.status(404).json({
@@ -44,6 +85,10 @@ const getNewsDetail = async (req, res, next) => {
   }
 };
 
+/**
+ * Get news statistics
+ * Route: /news/stats
+ */
 const getNewsStats = async (req, res, next) => {
   try {
     const stats = await getStats();
@@ -53,10 +98,15 @@ const getNewsStats = async (req, res, next) => {
       data: stats
     });
   } catch (error) {
+    console.error('[getNewsStats] Error:', error);
     next(error);
   }
 };
 
+/**
+ * Get all tags
+ * Route: /news/tags
+ */
 const getTags = async (req, res, next) => {
   try {
     const tags = await getAllTags();
@@ -66,10 +116,15 @@ const getTags = async (req, res, next) => {
       data: tags
     });
   } catch (error) {
+    console.error('[getTags] Error:', error);
     next(error);
   }
 };
 
+/**
+ * Get featured news
+ * Route: /news/featured
+ */
 const getFeatured = async (req, res, next) => {
   try {
     const { limit } = req.query;
@@ -82,10 +137,15 @@ const getFeatured = async (req, res, next) => {
       data: articles
     });
   } catch (error) {
+    console.error('[getFeatured] Error:', error);
     next(error);
   }
 };
 
+/**
+ * Get latest news
+ * Route: /news/latest
+ */
 const getLatest = async (req, res, next) => {
   try {
     const { limit } = req.query;
@@ -98,6 +158,25 @@ const getLatest = async (req, res, next) => {
       data: articles
     });
   } catch (error) {
+    console.error('[getLatest] Error:', error);
+    next(error);
+  }
+};
+
+/**
+ * Get all categories with counts
+ * Route: /news/categories
+ */
+const getCategories = async (req, res, next) => {
+  try {
+    const categories = await getCategoriesWithCounts();
+
+    res.json({
+      success: true,
+      data: categories
+    });
+  } catch (error) {
+    console.error('[getCategories] Error:', error);
     next(error);
   }
 };
@@ -108,5 +187,7 @@ module.exports = {
   getNewsStats,
   getTags,
   getFeatured,
-  getLatest
+  getLatest,
+  getNewsByCategoryController,
+  getCategories
 };

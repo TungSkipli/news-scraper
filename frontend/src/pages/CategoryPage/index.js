@@ -1,57 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getArticles, getSourceById, getArticlesBySourceAndCategory } from '../../services/sourceService';
+import { getNews, getNewsByCategory } from '../../services/newsService';
 import NewsCard from '../../components/shared/NewsCard';
 
 function CategoryPage() {
-  const { sourceId, categoryId } = useParams();
+  const { categoryId } = useParams();
   const navigate = useNavigate();
   const [articles, setArticles] = useState([]);
-  const [source, setSource] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchData();
-  }, [sourceId, categoryId]);
+  }, [categoryId]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       let articlesRes;
       
-      if (sourceId && categoryId) {
-        articlesRes = await getArticlesBySourceAndCategory(sourceId, categoryId, 50);
-      } else if (categoryId) {
-        articlesRes = await getArticles({ 
-          category_id: categoryId,
-          limit: 50 
-        });
-      } else if (sourceId) {
-        articlesRes = await getArticles({ 
-          source_id: sourceId,
-          limit: 50 
-        });
+      if (categoryId) {
+        // Fetch by specific category
+        articlesRes = await getNewsByCategory(categoryId, { limit: 50 });
+      } else {
+        // Fetch all
+        articlesRes = await getNews({ limit: 50 });
       }
 
       if (articlesRes && articlesRes.success) {
-        setArticles(articlesRes.data);
+        setArticles(articlesRes.data.articles || []);
       }
-
-      if (sourceId) {
-        const sourceRes = await getSourceById(sourceId);
-        if (sourceRes.success) {
-          setSource(sourceRes.data);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+      setError(err.message || 'Failed to fetch articles');
     } finally {
       setLoading(false);
     }
   };
 
-  const categoryName = articles.length > 0 ? articles[0].category_name : 'Category';
+  const categoryName = categoryId || (articles.length > 0 ? articles[0].category : 'All Articles');
 
   if (loading) {
     return (
@@ -79,30 +68,35 @@ function CategoryPage() {
                   Home
                 </button>
               </li>
-              {source && (
-                <li>
-                  <button onClick={() => navigate(`/source/${sourceId}`)} className="link link-hover">
-                    {source.name}
-                  </button>
-                </li>
-              )}
-              <li>{categoryName}</li>
+              <li>
+                <button onClick={() => navigate('/news')} className="link link-hover">
+                  News
+                </button>
+              </li>
+              <li className="capitalize">{categoryName}</li>
             </ul>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <h1 className="text-3xl font-bold mb-2">{categoryName}</h1>
-        {source && (
-          <p className="text-gray-600 mb-6">
-            From source: <span className="text-primary font-semibold">{source.name}</span>
-          </p>
+        <h1 className="text-3xl font-bold mb-6 capitalize">{categoryName}</h1>
+
+{error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
+          </div>
         )}
 
-        {articles.length === 0 ? (
+        {articles.length === 0 && !loading ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No articles yet</p>
+            <p className="text-gray-500 text-lg">No articles in this category yet</p>
+            <button 
+              className="btn btn-primary btn-sm mt-4"
+              onClick={() => navigate('/scraper')}
+            >
+              Scrape Articles
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getArticleById } from '../../services/sourceService';
+import { getNewsById } from '../../services/newsService';
 
 function NewsDetailPage() {
   const { id } = useParams();
@@ -17,7 +17,7 @@ function NewsDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await getArticleById(id);
+      const response = await getNewsById(id);
       if (response.success) {
         setArticle(response.data);
       } else {

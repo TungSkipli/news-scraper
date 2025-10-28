@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { detectCategories, scrapeSource, getAllSources } from '../../services/sourceService';
+import { detectCategories, scrapeSource } from '../../services/scrapeService';
+import { getStats } from '../../services/newsService';
 
 function Scraper() {
   const [homepageUrl, setHomepageUrl] = useState('');
@@ -34,11 +35,12 @@ function Scraper() {
 
   const fetchSources = async () => {
     try {
-      const response = await getAllSources();
-      if (response.success && response.data) {
-        setSources(response.data);
+      const response = await getStats();
+      if (response.success && response.data && response.data.bySource) {
+        setSources(response.data.bySource);
       }
     } catch (error) {
+      console.error('Failed to fetch sources:', error);
     }
   };
 

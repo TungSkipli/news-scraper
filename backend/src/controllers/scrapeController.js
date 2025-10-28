@@ -3,6 +3,10 @@ const { scrapeEntireSource, scrapeSingleCategory } = require('../services/source
 const { detectCategories } = require('../services/homepageDetector');
 const { validateUrl, validateUrlArray } = require('../utils/validators');
 
+/**
+ * Scrape URL without saving
+ * POST /scrape/url
+ */
 const scrapeUrlController = async (req, res, next) => {
   try {
     const { url } = req.body;
@@ -23,6 +27,7 @@ const scrapeUrlController = async (req, res, next) => {
       data: article
     });
   } catch (error) {
+    console.error('[scrapeUrlController] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to scrape URL',
@@ -31,6 +36,11 @@ const scrapeUrlController = async (req, res, next) => {
   }
 };
 
+/**
+ * Scrape and save URL to Firebase
+ * POST /scrape/save
+ * Saves to: news/articles/{category}/:id
+ */
 const scrapeAndSaveController = async (req, res, next) => {
   try {
     const { url } = req.body;
@@ -47,14 +57,18 @@ const scrapeAndSaveController = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'Article scraped and saved successfully',
+      message: result.isDuplicate 
+        ? `⚠️ Duplicate detected - Article already exists at ${result.path}`
+        : `✅ Article saved to ${result.path}`,
       data: {
         article: result.article,
-        firebaseId: result.firebaseId
+        firebaseId: result.firebaseId,
+        path: result.path,
+        isDuplicate: result.isDuplicate || false
       }
     });
   } catch (error) {
-    console.error('❌ Scrape and save error:', error.message);
+    console.error('[scrapeAndSaveController] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to scrape and save URL',
@@ -63,9 +77,13 @@ const scrapeAndSaveController = async (req, res, next) => {
   }
 };
 
+/**
+ * Batch scrape multiple URLs
+ * POST /scrape/batch
+ */
 const batchScrapeController = async (req, res, next) => {
   try {
-    const { urls } = req.body;
+    const { urls, saveToFirebase } = req.body;
 
     const validation = validateUrlArray(urls);
     if (!validation.valid) {
@@ -79,6 +97,7 @@ const batchScrapeController = async (req, res, next) => {
       total: urls.length,
       success: 0,
       failed: 0,
+      duplicates: 0,
       articles: [],
       errors: []
     };
@@ -87,13 +106,32 @@ const batchScrapeController = async (req, res, next) => {
       const url = urls[i];
 
       try {
-        const article = await scrapeUrl(url);
-        results.success++;
-        results.articles.push({
-          url,
-          article,
-          status: 'success'
-        });
+        if (saveToFirebase) {
+          const result = await scrapeAndSave(url);
+          results.success++;
+          
+          if (result.isDuplicate) {
+            results.duplicates++;
+          }
+          
+          results.articles.push({
+            url,
+            article: result.article,
+            firebaseId: result.firebaseId,
+            path: result.path,
+            status: result.isDuplicate ? 'duplicate' : 'success',
+            isDuplicate: result.isDuplicate || false
+          });
+        } else {
+          const article = await scrapeUrl(url);
+          results.success++;
+          results.articles.push({
+            url,
+            article,
+            status: 'success',
+            isDuplicate: false
+          });
+        }
       } catch (error) {
         results.failed++;
         results.errors.push({
@@ -103,6 +141,7 @@ const batchScrapeController = async (req, res, next) => {
         });
       }
 
+      // Delay between requests
       if (i < urls.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
@@ -110,10 +149,11 @@ const batchScrapeController = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: `Batch scraping completed: ${results.success} success, ${results.failed} failed`,
+      message: `Batch scraping completed: ${results.success} success, ${results.failed} failed, ${results.duplicates} duplicates skipped`,
       data: results
     });
   } catch (error) {
+    console.error('[batchScrapeController] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to batch scrape URLs',
@@ -122,6 +162,10 @@ const batchScrapeController = async (req, res, next) => {
   }
 };
 
+/**
+ * Scrape entire source or single category
+ * POST /scrape/source
+ */
 const scrapeSourceController = async (req, res, next) => {
   try {
     const { url, options } = req.body;
@@ -134,6 +178,7 @@ const scrapeSourceController = async (req, res, next) => {
       });
     }
 
+    // Single category mode
     if (options?.mode === 'single' && options?.categoryUrl) {
       const detection = await detectCategories(url);
       const category = detection.categories.find(cat => cat.url === options.categoryUrl);
@@ -164,6 +209,7 @@ const scrapeSourceController = async (req, res, next) => {
       });
     }
 
+    // Full source mode
     const scrapeOptions = {
       maxCategoriesPerSource: options?.maxCategories || 5,
       maxPagesPerCategory: options?.maxPages || 2,
@@ -179,6 +225,7 @@ const scrapeSourceController = async (req, res, next) => {
       data: results
     });
   } catch (error) {
+    console.error('[scrapeSourceController] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to scrape source',
@@ -187,6 +234,10 @@ const scrapeSourceController = async (req, res, next) => {
   }
 };
 
+/**
+ * Detect categories from homepage
+ * POST /scrape/detect
+ */
 const detectCategoriesController = async (req, res, next) => {
   try {
     const { url } = req.body;
@@ -206,7 +257,7 @@ const detectCategoriesController = async (req, res, next) => {
       data: result
     });
   } catch (error) {
-    console.error('❌ Category detection error:', error.message);
+    console.error('[detectCategoriesController] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to detect categories',

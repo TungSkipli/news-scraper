@@ -1,12 +1,15 @@
 const { db, FieldValue } = require('../config/firebase');
 const { createSlug } = require('../utils/slugGenerator');
-const { normalizeCategory } = require('../utils/constants');
+const { normalizeCategory, FIREBASE_COLLECTIONS } = require('../utils/constants');
 
 const COLLECTIONS = {
   SOURCES: 'sources',
   CATEGORIES: 'categories'
 };
 
+/**
+ * Save or update source
+ */
 const saveSource = async (sourceData) => {
   try {
     const { name, domain, homepage_url } = sourceData;
@@ -44,10 +47,14 @@ const saveSource = async (sourceData) => {
     return { id: docRef.id, ...newSource };
 
   } catch (error) {
+    console.error('[saveSource] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Save or update category
+ */
 const saveCategory = async (sourceId, sourceDomain, categoryData) => {
   try {
     const { name, url } = categoryData;
@@ -87,31 +94,66 @@ const saveCategory = async (sourceId, sourceDomain, categoryData) => {
     return { id: docRef.id, ...newCategory };
 
   } catch (error) {
+    console.error('[saveCategory] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Save article to Firebase
+ * Path: news/articles/{category}/:id
+ */
 const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
   try {
     const normalizedCategory = normalizeCategory(categoryInfo.name);
     
-    const itemsRef = db
-      .collection('news')
-      .doc('articles')
-      .collection('category')
-      .doc(normalizedCategory)
-      .collection('items');
+    // Path: news/articles/{category}
+    const categoryRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(normalizedCategory);
 
-    if (articleData.url || articleData.external_source) {
-      const articleUrl = articleData.url || articleData.external_source;
-      const existingArticle = await itemsRef
+    // IMPROVED: Check if article already exists (more robust)
+    const articleUrl = articleData.url || articleData.external_source;
+    
+    if (!articleUrl) {
+      console.warn('[saveArticle] Warning: Article has no URL, cannot check for duplicates');
+    } else {
+      // Check by external_source URL
+      const existingArticle = await categoryRef
         .where('external_source', '==', articleUrl)
         .limit(1)
         .get();
       
       if (!existingArticle.empty) {
         const existingDoc = existingArticle.docs[0];
-        return { id: existingDoc.id, ...existingDoc.data() };
+        console.log(`[saveArticle] ⚠️  DUPLICATE DETECTED - Article already exists at: news/articles/${normalizedCategory}/${existingDoc.id}`);
+        console.log(`[saveArticle] URL: ${articleUrl}`);
+        return { 
+          id: existingDoc.id, 
+          ...existingDoc.data(),
+          isDuplicate: true 
+        };
+      }
+      
+      // Additional check: by slug (in case URL changes but article is same)
+      if (articleData.slug) {
+        const existingBySlug = await categoryRef
+          .where('slug', '==', articleData.slug)
+          .where('source_id', '==', sourceInfo.id)
+          .limit(1)
+          .get();
+        
+        if (!existingBySlug.empty) {
+          const existingDoc = existingBySlug.docs[0];
+          console.log(`[saveArticle] ⚠️  DUPLICATE DETECTED (by slug) - Article already exists at: news/articles/${normalizedCategory}/${existingDoc.id}`);
+          console.log(`[saveArticle] Slug: ${articleData.slug}`);
+          return { 
+            id: existingDoc.id, 
+            ...existingDoc.data(),
+            isDuplicate: true 
+          };
+        }
       }
     }
 
@@ -127,8 +169,11 @@ const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
       scraped_at: Date.now()
     };
 
-    const docRef = await itemsRef.add(enrichedArticle);
+    const docRef = await categoryRef.add(enrichedArticle);
 
+    console.log(`[saveArticle] Saved article to: news/articles/${normalizedCategory}/${docRef.id}`);
+
+    // Update counters
     await db.collection(COLLECTIONS.SOURCES).doc(sourceInfo.id).update({
       total_articles: FieldValue.increment(1)
     });
@@ -140,19 +185,27 @@ const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
     return { id: docRef.id, ...enrichedArticle };
 
   } catch (error) {
+    console.error('[saveArticle] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Get all sources
+ */
 const getAllSources = async () => {
   try {
     const snapshot = await db.collection(COLLECTIONS.SOURCES).get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
+    console.error('[getAllSources] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Get source by domain
+ */
 const getSourceByDomain = async (domain) => {
   try {
     const snapshot = await db
@@ -165,10 +218,32 @@ const getSourceByDomain = async (domain) => {
     
     return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
   } catch (error) {
+    console.error('[getSourceByDomain] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Get source by ID
+ */
+const getSourceById = async (sourceId) => {
+  try {
+    const doc = await db.collection(COLLECTIONS.SOURCES).doc(sourceId).get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error('[getSourceById] Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get categories by source
+ */
 const getCategoriesBySource = async (sourceId) => {
   try {
     const snapshot = await db
@@ -178,10 +253,14 @@ const getCategoriesBySource = async (sourceId) => {
 
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
+    console.error('[getCategoriesBySource] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Get all categories
+ */
 const getAllCategories = async () => {
   try {
     const snapshot = await db
@@ -193,100 +272,68 @@ const getAllCategories = async () => {
     
     return categories;
   } catch (error) {
+    console.error('[getAllCategories] Error:', error);
     throw error;
   }
 };
 
+/**
+ * Get articles from Firebase path: news/articles/{category}
+ */
 const getArticles = async (filters = {}) => {
   try {
-    const categoryRef = db.collection('news')
-      .doc('articles')
-      .collection('category');
+    const articlesRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES);
 
     let articles = [];
 
+    // Get list of all category collections
+    const collections = await articlesRef.listCollections();
+    const categoryNames = collections.map(col => col.id);
+
+    // If specific category_id filter
     if (filters.category_id) {
       const categoryDoc = await db.collection(COLLECTIONS.CATEGORIES).doc(filters.category_id).get();
       
       if (categoryDoc.exists) {
         const categoryData = categoryDoc.data();
+        const normalizedCategory = normalizeCategory(categoryData.name);
         
-        if (filters.source_id) {
-          const normalizedCategory = normalizeCategory(categoryData.name);
-          
-          const snapshot = await categoryRef.doc(normalizedCategory).collection('items').get();
-          
-          articles = snapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            category: normalizedCategory,
-            ...doc.data() 
-          }));
+        const snapshot = await articlesRef.collection(normalizedCategory).get();
+        
+        articles = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          category: normalizedCategory,
+          ...doc.data() 
+        }));
 
+        // Filter by source if needed
+        if (filters.source_id) {
           articles = articles.filter(a => a.source_id === filters.source_id && a.category_id === filters.category_id);
         } else {
-          const categorySlug = categoryData.slug;
-          
-          const allCategoriesWithSlug = await db.collection(COLLECTIONS.CATEGORIES)
-            .where('slug', '==', categorySlug)
-            .get();
-          
-          const validCategoryIds = new Set();
-          const normalizedCategories = new Set();
-          
-          allCategoriesWithSlug.docs.forEach(doc => {
-            const cat = doc.data();
-            validCategoryIds.add(doc.id);
-            normalizedCategories.add(normalizeCategory(cat.name));
-          });
-          
-          for (const normCat of normalizedCategories) {
-            const snapshot = await categoryRef.doc(normCat).collection('items').get();
-            const categoryArticles = snapshot.docs.map(doc => ({ 
-              id: doc.id, 
-              category: normCat,
-              ...doc.data() 
-            }));
-            
-            const filteredArticles = categoryArticles.filter(a => validCategoryIds.has(a.category_id));
-            articles = articles.concat(filteredArticles);
-          }
+          articles = articles.filter(a => a.category_id === filters.category_id);
         }
       }
     } else if (filters.source_id) {
-      const categoriesMetadata = await db.collection(COLLECTIONS.CATEGORIES).get();
-      
-      const normalizedCategoryNames = new Set();
-      categoriesMetadata.docs.forEach(doc => {
-        const categoryData = doc.data();
-        const normalizedName = normalizeCategory(categoryData.name);
-        normalizedCategoryNames.add(normalizedName);
-      });
-      
-      for (const normalizedName of normalizedCategoryNames) {
-        const snapshot = await categoryRef.doc(normalizedName).collection('items').get();
+      // Get all articles from all categories and filter by source
+      for (const categoryName of categoryNames) {
+        const snapshot = await articlesRef.collection(categoryName).get();
         const categoryArticles = snapshot.docs.map(doc => ({ 
           id: doc.id, 
-          category: normalizedName,
+          category: categoryName,
           ...doc.data() 
         }));
         
         articles = articles.concat(categoryArticles.filter(a => a.source_id === filters.source_id));
       }
     } else {
-      const categoriesMetadata = await db.collection(COLLECTIONS.CATEGORIES).get();
-      
-      const normalizedCategoryNames = new Set();
-      categoriesMetadata.docs.forEach(doc => {
-        const categoryData = doc.data();
-        const normalizedName = normalizeCategory(categoryData.name);
-        normalizedCategoryNames.add(normalizedName);
-      });
-      
-      for (const normalizedName of normalizedCategoryNames) {
-        const snapshot = await categoryRef.doc(normalizedName).collection('items').get();
+      // Get all articles from all categories
+      for (const categoryName of categoryNames) {
+        const snapshot = await articlesRef.collection(categoryName).get();
         const categoryArticles = snapshot.docs.map(doc => ({ 
           id: doc.id, 
-          category: normalizedName,
+          category: categoryName,
           ...doc.data() 
         }));
         
@@ -294,20 +341,10 @@ const getArticles = async (filters = {}) => {
       }
     }
 
-    if (articles.length === 0 && !filters.category_id && !filters.source_id) {
-      const legacySnapshot = await db.collection('news')
-        .doc('articles')
-        .collection('global')
-        .get();
-      
-      articles = legacySnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      }));
-    }
-
+    // Sort by date
     articles.sort((a, b) => (b.published_at || b.created_at || 0) - (a.published_at || a.created_at || 0));
 
+    // Apply limit
     if (filters.limit) {
       articles = articles.slice(0, filters.limit);
     }
@@ -319,55 +356,28 @@ const getArticles = async (filters = {}) => {
   }
 };
 
-const getSourceById = async (sourceId) => {
-  try {
-    const doc = await db.collection(COLLECTIONS.SOURCES).doc(sourceId).get();
-
-    if (!doc.exists) {
-      return null;
-    }
-
-    return { id: doc.id, ...doc.data() };
-  } catch (error) {
-    throw error;
-  }
-};
-
+/**
+ * Get single article by ID
+ * Searches across all categories
+ */
 const getArticleById = async (articleId) => {
   try {
-    const categoryRef = db.collection('news')
-      .doc('articles')
-      .collection('category');
+    const articlesRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES);
 
-    const categoriesSnapshot = await categoryRef.get();
+    const collections = await articlesRef.listCollections();
     
-    for (const categoryDoc of categoriesSnapshot.docs) {
-      const doc = await categoryRef
-        .doc(categoryDoc.id)
-        .collection('items')
-        .doc(articleId)
-        .get();
+    for (const collection of collections) {
+      const doc = await collection.doc(articleId).get();
       
       if (doc.exists) {
         return { 
           id: doc.id, 
-          category: categoryDoc.id,
+          category: collection.id,
           ...doc.data() 
         };
       }
-    }
-
-    const legacyDoc = await db.collection('news')
-      .doc('articles')
-      .collection('global')
-      .doc(articleId)
-      .get();
-    
-    if (legacyDoc.exists) {
-      return { 
-        id: legacyDoc.id, 
-        ...legacyDoc.data() 
-      };
     }
 
     return null;
@@ -377,6 +387,9 @@ const getArticleById = async (articleId) => {
   }
 };
 
+/**
+ * Get articles by category ID
+ */
 const getArticlesByCategory = async (categoryId, limit = 50) => {
   try {
     const categoryDoc = await db.collection(COLLECTIONS.CATEGORIES).doc(categoryId).get();
@@ -388,20 +401,25 @@ const getArticlesByCategory = async (categoryId, limit = 50) => {
     const categoryData = categoryDoc.data();
     const normalizedCategory = normalizeCategory(categoryData.name);
     
-    const categoryRef = db.collection('news')
-      .doc('articles')
-      .collection('category');
+    const articlesRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES);
     
-    const snapshot = await categoryRef.doc(normalizedCategory).collection('items').get();
+    const snapshot = await articlesRef.collection(normalizedCategory).get();
     
     let articles = snapshot.docs.map(doc => ({ 
       id: doc.id, 
       category: normalizedCategory,
       ...doc.data() 
     }));
-
+    
+    // Filter by category_id
+    articles = articles.filter(a => a.category_id === categoryId);
+    
+    // Sort by date
     articles.sort((a, b) => (b.published_at || b.created_at || 0) - (a.published_at || a.created_at || 0));
     
+    // Apply limit
     if (limit) {
       articles = articles.slice(0, limit);
     }
@@ -413,102 +431,58 @@ const getArticlesByCategory = async (categoryId, limit = 50) => {
   }
 };
 
-const getArticlesBySourceAndCategory = async (sourceId, categoryId, limit = 50) => {
+/**
+ * Delete source and all related data
+ */
+const deleteSource = async (sourceId) => {
   try {
-    const categoryDoc = await db.collection(COLLECTIONS.CATEGORIES).doc(categoryId).get();
+    // Get all categories for this source
+    const categories = await getCategoriesBySource(sourceId);
     
-    if (!categoryDoc.exists) {
-      return [];
-    }
-    
-    const categoryData = categoryDoc.data();
-    const normalizedCategory = normalizeCategory(categoryData.name);
-    
-    const categoryRef = db.collection('news')
-      .doc('articles')
-      .collection('category');
-    
-    const snapshot = await categoryRef.doc(normalizedCategory).collection('items').get();
-    
-    let articles = snapshot.docs.map(doc => ({ 
-      id: doc.id, 
-      category: normalizedCategory,
-      ...doc.data() 
-    }));
-
-    articles = articles.filter(a => a.source_id === sourceId);
-
-    articles.sort((a, b) => (b.published_at || b.created_at || 0) - (a.published_at || a.created_at || 0));
-    
-    if (limit) {
-      articles = articles.slice(0, limit);
-    }
-    
-    return articles;
-  } catch (error) {
-    console.error('[getArticlesBySourceAndCategory] Error:', error);
-    throw error;
-  }
-};
-
-const getUniqueCategoriesList = async () => {
-  try {
-    const categoriesSnapshot = await db.collection(COLLECTIONS.CATEGORIES).get();
-    const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
-    const categoryMap = new Map();
-    
+    // Delete all articles from those categories
     for (const category of categories) {
-      const categoryKey = category.slug || createSlug(category.name);
+      const normalizedCategory = normalizeCategory(category.name);
+      const articlesRef = db
+        .collection(FIREBASE_COLLECTIONS.NEWS)
+        .doc(FIREBASE_COLLECTIONS.ARTICLES)
+        .collection(normalizedCategory);
       
-      if (!categoryMap.has(categoryKey)) {
-        categoryMap.set(categoryKey, {
-          id: category.id,
-          name: category.name,
-          slug: categoryKey,
-          total_articles: 0,
-          sources: []
-        });
-      }
+      const snapshot = await articlesRef.where('source_id', '==', sourceId).get();
       
-      const categoryEntry = categoryMap.get(categoryKey);
-      const articleCount = category.total_articles || 0;
-      
-      categoryEntry.total_articles += articleCount;
-      categoryEntry.sources.push({
-        source_id: category.source_id,
-        source_name: category.source_domain,
-        article_count: articleCount
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
       });
+      
+      await batch.commit();
+      
+      // Delete category
+      await db.collection(COLLECTIONS.CATEGORIES).doc(category.id).delete();
     }
     
-    const uniqueCategories = Array.from(categoryMap.values());
-    uniqueCategories.sort((a, b) => b.total_articles - a.total_articles);
+    // Delete source
+    await db.collection(COLLECTIONS.SOURCES).doc(sourceId).delete();
     
-    return uniqueCategories;
+    return { success: true };
   } catch (error) {
-    console.error('[getUniqueCategoriesList] Error:', error);
+    console.error('[deleteSource] Error:', error);
     throw error;
   }
 };
 
-const getCategoriesCountBySource = async (sourceId) => {
+/**
+ * Update source
+ */
+const updateSource = async (sourceId, updates) => {
   try {
-    const categoriesSnapshot = await db.collection(COLLECTIONS.CATEGORIES)
-      .where('source_id', '==', sourceId)
-      .get();
+    await db.collection(COLLECTIONS.SOURCES).doc(sourceId).update({
+      ...updates,
+      updated_at: Date.now()
+    });
     
-    const categories = categoriesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      article_count: doc.data().total_articles || 0
-    }));
-    
-    categories.sort((a, b) => b.article_count - a.article_count);
-    
-    return categories;
+    return { success: true };
   } catch (error) {
-    console.error('[getCategoriesCountBySource] Error:', error);
+    console.error('[updateSource] Error:', error);
     throw error;
   }
 };
@@ -519,14 +493,12 @@ module.exports = {
   saveArticle,
   getAllSources,
   getSourceByDomain,
+  getSourceById,
   getCategoriesBySource,
   getAllCategories,
   getArticles,
-  getSourceById,
   getArticleById,
   getArticlesByCategory,
-  getArticlesBySourceAndCategory,
-  getUniqueCategoriesList,
-  getCategoriesCountBySource,
-  COLLECTIONS
+  deleteSource,
+  updateSource
 };

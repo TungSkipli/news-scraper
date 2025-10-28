@@ -1,56 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getArticles, getAllSources } from '../../services/sourceService';
+import { getNews, getStats, getFeatured, getLatest } from '../../services/newsService';
 import NewsCard from '../../components/shared/NewsCard';
 
 function HomePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const sourceId = searchParams.get('source_id');
+  const category = searchParams.get('category');
   
   const [featuredArticle, setFeaturedArticle] = useState(null);
   const [latestArticles, setLatestArticles] = useState([]);
   const [sidebarArticles, setSidebarArticles] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [sources, setSources] = useState([]);
+  const [statsData, setStatsData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, [sourceId]);
+  }, [category]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      const articlesRes = await getArticles({ 
-        source_id: sourceId || undefined, 
-        limit: 50 
-      });
-
-      const sourcesRes = await getAllSources();
-
-      if (articlesRes.success && articlesRes.data && articlesRes.data.length > 0) {
-        setFeaturedArticle(articlesRes.data[0]);
-        setLatestArticles(articlesRes.data.slice(1, 9));
-        setSidebarArticles(articlesRes.data.slice(9, 12));
-      } else {
-        setFeaturedArticle(null);
-        setLatestArticles([]);
-        setSidebarArticles([]);
+      // Fetch featured article
+      const featuredRes = await getFeatured(1);
+      if (featuredRes.success && featuredRes.data && featuredRes.data.length > 0) {
+        setFeaturedArticle(featuredRes.data[0]);
       }
 
-      if (sourcesRes.success && sourcesRes.data) {
-        setSources(sourcesRes.data);
-        
-        const totalArticles = sourcesRes.data.reduce((sum, s) => sum + (s.total_articles || 0), 0);
-        const totalSources = sourcesRes.data.length;
-        const totalCategories = sourcesRes.data.reduce((sum, s) => sum + (s.total_categories || 0), 0);
-        
-        setStats({
-          total: totalArticles,
-          sources: totalSources,
-          categories: totalCategories
+      // Fetch latest articles
+      const latestRes = await getLatest(11);
+      if (latestRes.success && latestRes.data) {
+        setLatestArticles(latestRes.data.slice(0, 8));
+        setSidebarArticles(latestRes.data.slice(8, 11));
+      }
+
+      // Fetch stats
+      const statsRes = await getStats();
+      if (statsRes.success && statsRes.data) {
+        const data = statsRes.data;
+        setStatsData({
+          total: data.total || 0,
+          sources: data.bySource?.length || 0,
+          categories: data.byCategory?.length || 0
         });
       }
     } catch (error) {
@@ -64,13 +56,13 @@ function HomePage() {
     <div className="min-h-screen bg-white">
       <div className="bg-base-100 border-b border-base-300 py-4">
         <div className="container mx-auto px-4 max-w-7xl">
-          {stats && (
+          {statsData && (
             <div className="flex gap-6 text-sm text-base-content/70">
-              <span><strong className="text-base-content">{stats.total}</strong> articles</span>
+              <span><strong className="text-base-content">{statsData.total}</strong> articles</span>
               <span>•</span>
-              <span><strong className="text-base-content">{stats.sources}</strong> sources</span>
+              <span><strong className="text-base-content">{statsData.sources}</strong> sources</span>
               <span>•</span>
-              <span><strong className="text-base-content">{stats.categories}</strong> categories</span>
+              <span><strong className="text-base-content">{statsData.categories}</strong> categories</span>
             </div>
           )}
         </div>
@@ -94,15 +86,13 @@ function HomePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <h3 className="text-lg font-bold mb-2 text-gray-900">No articles found</h3>
-                <p className="text-gray-500 text-sm mb-4">This source has no articles yet or try selecting a different source</p>
-                {sourceId && (
-                  <button 
-                    className="btn btn-primary btn-sm"
-                    onClick={() => navigate('/')}
-                  >
-                    View All Sources
-                  </button>
-                )}
+                <p className="text-gray-500 text-sm mb-4">Start scraping articles to see them here</p>
+                <button 
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate('/scraper')}
+                >
+                  Go to Scraper
+                </button>
               </div>
             ) : (
               <>
@@ -166,9 +156,9 @@ function HomePage() {
               )}
 
               <div className="mt-8 p-4 bg-base-200 rounded">
-                <h4 className="font-bold mb-3">Manage Sources</h4>
+                <h4 className="font-bold mb-3">Scrape News</h4>
                 <p className="text-sm text-base-content/70 mb-3">
-                  Add and manage news sources
+                  Add new articles from various sources
                 </p>
                 <button 
                   className="btn btn-primary btn-sm w-full"
@@ -178,23 +168,18 @@ function HomePage() {
                 </button>
               </div>
 
-              {sources.length > 0 && (
+              {statsData && statsData.categories > 0 && (
                 <div className="mt-6">
-                  <h4 className="font-bold mb-3">News Sources</h4>
-                  <div className="space-y-2">
-                    {sources.slice(0, 5).map(source => (
-                      <div 
-                        key={source.id}
-                        className="text-sm p-2 hover:bg-base-200 rounded cursor-pointer transition-colors"
-                        onClick={() => navigate(`/?source_id=${source.id}`)}
-                      >
-                        <div className="font-semibold">{source.name}</div>
-                        <div className="text-xs text-base-content/60">
-                          {source.total_articles || 0} articles
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <h4 className="font-bold mb-3">Categories</h4>
+                  <p className="text-sm text-base-content/70">
+                    {statsData.categories} categories available
+                  </p>
+                  <button 
+                    className="btn btn-outline btn-sm w-full mt-2"
+                    onClick={() => navigate('/news')}
+                  >
+                    Browse by Category
+                  </button>
                 </div>
               )}
             </div>
