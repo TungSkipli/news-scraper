@@ -3,10 +3,6 @@ const { scrapeEntireSource, scrapeSingleCategory } = require('../services/source
 const { detectCategories } = require('../services/homepageDetector');
 const { validateUrl, validateUrlArray } = require('../utils/validators');
 
-/**
- * Scrape URL without saving
- * POST /scrape/url
- */
 const scrapeUrlController = async (req, res, next) => {
   try {
     const { url } = req.body;
@@ -36,11 +32,6 @@ const scrapeUrlController = async (req, res, next) => {
   }
 };
 
-/**
- * Scrape and save URL to Firebase
- * POST /scrape/save
- * Saves to: news/articles/{category}/:id
- */
 const scrapeAndSaveController = async (req, res, next) => {
   try {
     const { url } = req.body;
@@ -77,10 +68,6 @@ const scrapeAndSaveController = async (req, res, next) => {
   }
 };
 
-/**
- * Batch scrape multiple URLs
- * POST /scrape/batch
- */
 const batchScrapeController = async (req, res, next) => {
   try {
     const { urls, saveToFirebase } = req.body;
@@ -141,7 +128,6 @@ const batchScrapeController = async (req, res, next) => {
         });
       }
 
-      // Delay between requests
       if (i < urls.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
@@ -162,13 +148,10 @@ const batchScrapeController = async (req, res, next) => {
   }
 };
 
-/**
- * Scrape entire source or single category
- * POST /scrape/source
- */
 const scrapeSourceController = async (req, res, next) => {
   try {
-    const { url, options } = req.body;
+    const { url, ...restBody } = req.body;
+    const options = restBody.options || restBody;
 
     const validation = validateUrl(url);
     if (!validation.valid) {

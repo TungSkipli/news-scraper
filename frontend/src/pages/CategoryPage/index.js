@@ -9,10 +9,11 @@ function CategoryPage() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sortBy, setSortBy] = useState('desc');
 
   useEffect(() => {
     fetchData();
-  }, [categoryId]);
+  }, [categoryId, sortBy]);
 
   const fetchData = async () => {
     try {
@@ -22,11 +23,9 @@ function CategoryPage() {
       let articlesRes;
       
       if (categoryId) {
-        // Fetch by specific category
-        articlesRes = await getNewsByCategory(categoryId, { limit: 50 });
+        articlesRes = await getNewsByCategory(categoryId, { limit: 50, sortBy });
       } else {
-        // Fetch all
-        articlesRes = await getNews({ limit: 50 });
+        articlesRes = await getNews({ limit: 50, sortBy });
       }
 
       if (articlesRes && articlesRes.success) {
@@ -80,9 +79,21 @@ function CategoryPage() {
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <h1 className="text-3xl font-bold mb-6 capitalize">{categoryName}</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold capitalize">{categoryName}</h1>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="select select-bordered"
+          >
+            <option value="desc">Newest First</option>
+            <option value="asc">Oldest First</option>
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="title-desc">Title (Z-A)</option>
+          </select>
+        </div>
 
-{error && (
+        {error && (
           <div className="alert alert-error mb-4">
             <span>{error}</span>
           </div>

@@ -1,4 +1,4 @@
-const { db, FieldValue } = require('../config/firebase');
+const { db, FieldValue, algoliaClient, algoliaIndexName } = require('../config/firebase');
 const { createSlug } = require('../utils/slugGenerator');
 const { normalizeCategory, FIREBASE_COLLECTIONS } = require('../utils/constants');
 
@@ -7,9 +7,6 @@ const COLLECTIONS = {
   CATEGORIES: 'categories'
 };
 
-/**
- * Save or update source
- */
 const saveSource = async (sourceData) => {
   try {
     const { name, domain, homepage_url } = sourceData;
@@ -52,9 +49,6 @@ const saveSource = async (sourceData) => {
   }
 };
 
-/**
- * Save or update category
- */
 const saveCategory = async (sourceId, sourceDomain, categoryData) => {
   try {
     const { name, url } = categoryData;
@@ -99,27 +93,29 @@ const saveCategory = async (sourceId, sourceDomain, categoryData) => {
   }
 };
 
-/**
- * Save article to Firebase
- * Path: news/articles/{category}/:id
- */
 const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
   try {
-    const normalizedCategory = normalizeCategory(categoryInfo.name);
+    let normalizedCategory;
     
-    // Path: news/articles/{category}
+    if (articleData.category && articleData.category !== 'uncategorized') {
+      normalizedCategory = articleData.category;
+      console.log(`[saveArticle] Using category from article URL: ${normalizedCategory}`);
+    } else {
+      normalizedCategory = normalizeCategory(categoryInfo.name);
+      console.log(`[saveArticle] Using category from detection: ${normalizedCategory}`);
+    }
+    
+
     const categoryRef = db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
       .collection(normalizedCategory);
 
-    // IMPROVED: Check if article already exists (more robust)
     const articleUrl = articleData.url || articleData.external_source;
     
     if (!articleUrl) {
       console.warn('[saveArticle] Warning: Article has no URL, cannot check for duplicates');
     } else {
-      // Check by external_source URL
       const existingArticle = await categoryRef
         .where('external_source', '==', articleUrl)
         .limit(1)
@@ -136,7 +132,6 @@ const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
         };
       }
       
-      // Additional check: by slug (in case URL changes but article is same)
       if (articleData.slug) {
         const existingBySlug = await categoryRef
           .where('slug', '==', articleData.slug)
@@ -173,7 +168,21 @@ const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
 
     console.log(`[saveArticle] Saved article to: news/articles/${normalizedCategory}/${docRef.id}`);
 
-    // Update counters
+    await algoliaClient.saveObject({
+      indexName: algoliaIndexName,
+      body: {
+        objectID: docRef.id,
+        title: enrichedArticle.title,
+        summary: enrichedArticle.summary || '',
+        category: normalizedCategory,
+        image: enrichedArticle.image?.url || '',
+        published_at: enrichedArticle.published_at
+      }
+    });
+
+    console.log(`[saveArticle] Synced to Algolia: ${docRef.id}`);
+
+
     await db.collection(COLLECTIONS.SOURCES).doc(sourceInfo.id).update({
       total_articles: FieldValue.increment(1)
     });
@@ -190,9 +199,6 @@ const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
   }
 };
 
-/**
- * Get all sources
- */
 const getAllSources = async () => {
   try {
     const snapshot = await db.collection(COLLECTIONS.SOURCES).get();
@@ -203,9 +209,6 @@ const getAllSources = async () => {
   }
 };
 
-/**
- * Get source by domain
- */
 const getSourceByDomain = async (domain) => {
   try {
     const snapshot = await db
@@ -223,9 +226,6 @@ const getSourceByDomain = async (domain) => {
   }
 };
 
-/**
- * Get source by ID
- */
 const getSourceById = async (sourceId) => {
   try {
     const doc = await db.collection(COLLECTIONS.SOURCES).doc(sourceId).get();
@@ -241,9 +241,6 @@ const getSourceById = async (sourceId) => {
   }
 };
 
-/**
- * Get categories by source
- */
 const getCategoriesBySource = async (sourceId) => {
   try {
     const snapshot = await db
@@ -258,9 +255,6 @@ const getCategoriesBySource = async (sourceId) => {
   }
 };
 
-/**
- * Get all categories
- */
 const getAllCategories = async () => {
   try {
     const snapshot = await db

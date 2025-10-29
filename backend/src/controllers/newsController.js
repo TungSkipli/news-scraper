@@ -9,20 +9,17 @@ const {
   getCategoriesWithCounts 
 } = require('../services/newsService');
 
-/**
- * Get all news with pagination and filters
- * Query params: page, limit, search, tag, category
- */
 const getNews = async (req, res, next) => {
   try {
-    const { page, limit, search, tag, category } = req.query;
+    const { page, limit, search, tag, category, sortBy } = req.query;
     
     const result = await getAllNews({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 12,
       search: search || '',
       tag: tag || '',
-      category: category || ''
+      category: category || '',
+      sortBy: sortBy || 'desc'
     });
 
     res.json({
@@ -35,18 +32,15 @@ const getNews = async (req, res, next) => {
   }
 };
 
-/**
- * Get news by category
- * Route: /news/category/:category
- */
 const getNewsByCategoryController = async (req, res, next) => {
   try {
     const { category } = req.params;
-    const { page, limit } = req.query;
+    const { page, limit, sortBy } = req.query;
     
     const result = await getNewsByCategory(category, {
       page: parseInt(page) || 1,
-      limit: parseInt(limit) || 12
+      limit: parseInt(limit) || 12,
+      sortBy: sortBy || 'desc'
     });
 
     res.json({
@@ -59,10 +53,6 @@ const getNewsByCategoryController = async (req, res, next) => {
   }
 };
 
-/**
- * Get single news article by ID
- * Route: /news/:id or /news/:category/:id
- */
 const getNewsDetail = async (req, res, next) => {
   try {
     const { id, category } = req.params;
@@ -85,10 +75,6 @@ const getNewsDetail = async (req, res, next) => {
   }
 };
 
-/**
- * Get news statistics
- * Route: /news/stats
- */
 const getNewsStats = async (req, res, next) => {
   try {
     const stats = await getStats();
@@ -103,10 +89,6 @@ const getNewsStats = async (req, res, next) => {
   }
 };
 
-/**
- * Get all tags
- * Route: /news/tags
- */
 const getTags = async (req, res, next) => {
   try {
     const tags = await getAllTags();
@@ -121,10 +103,6 @@ const getTags = async (req, res, next) => {
   }
 };
 
-/**
- * Get featured news
- * Route: /news/featured
- */
 const getFeatured = async (req, res, next) => {
   try {
     const { limit } = req.query;
@@ -142,10 +120,6 @@ const getFeatured = async (req, res, next) => {
   }
 };
 
-/**
- * Get latest news
- * Route: /news/latest
- */
 const getLatest = async (req, res, next) => {
   try {
     const { limit } = req.query;
@@ -163,10 +137,6 @@ const getLatest = async (req, res, next) => {
   }
 };
 
-/**
- * Get all categories with counts
- * Route: /news/categories
- */
 const getCategories = async (req, res, next) => {
   try {
     const categories = await getCategoriesWithCounts();

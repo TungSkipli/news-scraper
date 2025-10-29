@@ -14,6 +14,7 @@ function NewsListPage() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
+  const [sortBy, setSortBy] = useState('desc');
 
   const limit = 12;
 
@@ -29,7 +30,7 @@ function NewsListPage() {
 
   useEffect(() => {
     fetchArticles();
-  }, [currentPage, search, selectedCategory]);
+  }, [currentPage, search, selectedCategory, sortBy]);
 
   const fetchArticles = async () => {
     try {
@@ -40,7 +41,8 @@ function NewsListPage() {
         page: currentPage,
         limit: limit,
         search: search || '',
-        category: selectedCategory || ''
+        category: selectedCategory || '',
+        sortBy: sortBy
       };
       
       const response = await getNews(params);
@@ -86,6 +88,11 @@ function NewsListPage() {
   const handlePageChange = (page) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSortChange = (newSort) => {
+    setSortBy(newSort);
+    setCurrentPage(1);
   };
 
 
@@ -141,13 +148,37 @@ function NewsListPage() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-[1130px] mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold mb-4">All News</h1>
-          <input
-            type="text"
-            placeholder="Search news..."
-            value={search}
-            onChange={handleSearch}
-            className="input input-bordered w-full max-w-md"
-          />
+          <div className="flex gap-3 flex-wrap items-center">
+            <input
+              type="text"
+              placeholder="Search news..."
+              value={search}
+              onChange={handleSearch}
+              className="input input-bordered w-full max-w-md flex-1"
+            />
+            <select
+              value={selectedCategory}
+              onChange={(e) => handleCategoryFilter(e.target.value)}
+              className="select select-bordered"
+            >
+              <option value="">All Categories</option>
+              {categories.map((category, index) => (
+                <option key={category.category || index} value={category.category}>
+                  {category.category} ({category.count || 0})
+                </option>
+              ))}
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => handleSortChange(e.target.value)}
+              className="select select-bordered"
+            >
+              <option value="desc">Newest First</option>
+              <option value="asc">Oldest First</option>
+              <option value="title-asc">Title (A-Z)</option>
+              <option value="title-desc">Title (Z-A)</option>
+            </select>
+          </div>
         </div>
       </div>
 

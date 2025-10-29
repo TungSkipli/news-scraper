@@ -26,7 +26,6 @@ app.get('/', (req, res) => {
     });
 });
 
-// Mount all routes under /api prefix to match frontend services
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api', newsRoutes);
 app.use('/api', sourceRoutes);

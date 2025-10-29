@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const { db } = require('../config/firebase');
+const { db, algoliaClient, algoliaIndexName } = require('../config/firebase');
 const {
   PROXY_CONFIG,
   SCRAPER_CONFIG,
@@ -395,6 +395,20 @@ const scrapeAndSave = async (url) => {
 
     console.log(`[scrapeAndSave] ✅ NEW article saved to: news/articles/${article.category}/${docRef.id}`);
     console.log(`[scrapeAndSave] Title: ${article.title}`);
+
+    await algoliaClient.saveObject({
+      indexName: algoliaIndexName,
+      body: {
+        objectID: docRef.id,
+        title: article.title,
+        summary: article.summary,
+        category: article.category,
+        image: article.image.url,
+        published_at: article.published_at
+      }
+    });
+
+    console.log(`[scrapeAndSave] ✅ Article synced to Algolia`);
 
     return {
       success: true,
