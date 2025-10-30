@@ -190,7 +190,7 @@ const detectCategories = async (homepageUrl) => {
 
     const categories = result.categories
       .filter(cat => cat.name.length > 2 && cat.name.length < 50)
-      .filter((cat, index, self) => 
+      .filter((cat, index, self) =>
         index === self.findIndex(c => c.name.toLowerCase() === cat.name.toLowerCase())
       )
       .slice(0, 50);
