@@ -1,14 +1,26 @@
-const { getAllNews, getNewsById, getStats, getAllTags, getFeaturedNews, getLatestNews } = require('../services/newsService');
+const { 
+  getAllNews, 
+  getNewsById, 
+  getStats, 
+  getAllTags, 
+  getFeaturedNews, 
+  getLatestNews,
+  getNewsByCategory,
+  getCategoriesWithCounts 
+} = require('../services/newsService');
 
 const getNews = async (req, res, next) => {
   try {
-    const { page, limit, search, tag } = req.query;
+    const { page, limit, search, tag, category, sortBy, dateRange } = req.query;
     
     const result = await getAllNews({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 12,
       search: search || '',
-      tag: tag || ''
+      tag: tag || '',
+      category: category || '',
+      sortBy: sortBy || 'desc',
+      dateRange: dateRange || ''
     });
 
     res.json({
@@ -16,15 +28,37 @@ const getNews = async (req, res, next) => {
       data: result
     });
   } catch (error) {
-    console.error('Error in getNews:', error);
+    console.error('[getNews] Error:', error);
+    next(error);
+  }
+};
+
+const getNewsByCategoryController = async (req, res, next) => {
+  try {
+    const { category } = req.params;
+    const { page, limit, sortBy, dateRange } = req.query;
+    
+    const result = await getNewsByCategory(category, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 12,
+      sortBy: sortBy || 'desc',
+      dateRange: dateRange || ''
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('[getNewsByCategoryController] Error:', error);
     next(error);
   }
 };
 
 const getNewsDetail = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const article = await getNewsById(id);
+    const { id, category } = req.params;
+    const article = await getNewsById(id, category);
 
     if (!article) {
       return res.status(404).json({
@@ -38,7 +72,7 @@ const getNewsDetail = async (req, res, next) => {
       data: article
     });
   } catch (error) {
-    console.error('Error in getNewsDetail:', error);
+    console.error('[getNewsDetail] Error:', error);
     next(error);
   }
 };
@@ -52,7 +86,7 @@ const getNewsStats = async (req, res, next) => {
       data: stats
     });
   } catch (error) {
-    console.error('Error in getNewsStats:', error);
+    console.error('[getNewsStats] Error:', error);
     next(error);
   }
 };
@@ -66,7 +100,7 @@ const getTags = async (req, res, next) => {
       data: tags
     });
   } catch (error) {
-    console.error('Error in getTags:', error);
+    console.error('[getTags] Error:', error);
     next(error);
   }
 };
@@ -83,7 +117,7 @@ const getFeatured = async (req, res, next) => {
       data: articles
     });
   } catch (error) {
-    console.error('Error in getFeatured:', error);
+    console.error('[getFeatured] Error:', error);
     next(error);
   }
 };
@@ -100,7 +134,21 @@ const getLatest = async (req, res, next) => {
       data: articles
     });
   } catch (error) {
-    console.error('Error in getLatest:', error);
+    console.error('[getLatest] Error:', error);
+    next(error);
+  }
+};
+
+const getCategories = async (req, res, next) => {
+  try {
+    const categories = await getCategoriesWithCounts();
+
+    res.json({
+      success: true,
+      data: categories
+    });
+  } catch (error) {
+    console.error('[getCategories] Error:', error);
     next(error);
   }
 };
@@ -111,5 +159,7 @@ module.exports = {
   getNewsStats,
   getTags,
   getFeatured,
-  getLatest
+  getLatest,
+  getNewsByCategoryController,
+  getCategories
 };

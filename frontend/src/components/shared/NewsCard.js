@@ -8,10 +8,10 @@ function NewsCard({ article, onClick, variant = 'default' }) {
     const diffMs = now - date;
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     
-    if (diffHours < 1) return 'Vừa xong';
-    if (diffHours < 24) return `${diffHours} giờ trước`;
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hours ago`;
     
-    return date.toLocaleDateString('vi-VN', { 
+    return date.toLocaleDateString('en-US', { 
       day: '2-digit', 
       month: '2-digit', 
       year: 'numeric' 
@@ -39,11 +39,17 @@ function NewsCard({ article, onClick, variant = 'default' }) {
             {article.summary}
           </p>
           <div className="flex items-center gap-3 text-sm text-base-content/60">
+            {article.source_name && (
+              <>
+                <span className="text-primary font-semibold">{article.source_name}</span>
+                <span>•</span>
+              </>
+            )}
             <span>{formatDate(article.published_at)}</span>
-            {article.tags && article.tags[0] && (
+            {article.category_name && (
               <>
                 <span>•</span>
-                <span className="text-primary">{article.tags[0]}</span>
+                <span className="text-secondary">{article.category_name}</span>
               </>
             )}
           </div>
@@ -96,11 +102,17 @@ function NewsCard({ article, onClick, variant = 'default' }) {
         {article.summary}
       </p>
       <div className="flex items-center gap-2 text-xs text-base-content/60">
+        {article.source_name && (
+          <>
+            <span className="text-primary font-semibold">{article.source_name}</span>
+            <span>•</span>
+          </>
+        )}
         <span>{formatDate(article.published_at)}</span>
-        {article.tags && article.tags[0] && (
+        {article.category_name && (
           <>
             <span>•</span>
-            <span className="text-primary">{article.tags[0]}</span>
+            <span className="text-secondary">{article.category_name}</span>
           </>
         )}
       </div>

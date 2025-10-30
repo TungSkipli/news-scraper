@@ -1,52 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { getAllSources } from '../../services/sourceService';
 
 function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sources, setSources] = useState([]);
   
   const searchParams = new URLSearchParams(location.search);
-  const currentTag = searchParams.get('tag');
+  const currentSourceId = searchParams.get('source_id');
+
+  useEffect(() => {
+    fetchSources();
+  }, []);
+
+  const fetchSources = async () => {
+    try {
+      const response = await getAllSources();
+      if (response.success && response.data) {
+        setSources(response.data);
+      }
+    } catch (error) {
+    }
+  };
+
+  const handleSourceChange = (sourceId) => {
+    if (sourceId) {
+      navigate(`/?source_id=${sourceId}`);
+    } else {
+      navigate('/');
+    }
+  };
 
   const categories = [
     {
-      title: 'Trang chủ',
+      title: 'Home',
       path: '/',
       subcategories: []
     },
     {
-      title: 'Tin tức',
+      title: 'News',
       path: '/news',
-      subcategories: [
-        { name: 'Tất cả', tag: '' },
-        { name: 'Công nghệ', tag: 'technology' },
-        { name: 'Khoa học', tag: 'science' },
-        { name: 'Kinh doanh', tag: 'business' },
-        { name: 'Giải trí', tag: 'entertainment' },
-      ]
-    },
-    {
-      title: 'Thế giới',
-      path: '/news',
-      defaultTag: 'world',
-      subcategories: [
-        { name: 'Quốc tế', tag: 'international' },
-        { name: 'Châu Á', tag: 'asia' },
-        { name: 'Châu Âu', tag: 'europe' },
-        { name: 'Châu Mỹ', tag: 'america' },
-      ]
-    },
-    {
-      title: 'Công nghệ',
-      path: '/news',
-      defaultTag: 'technology',
-      subcategories: [
-        { name: 'AI & Machine Learning', tag: 'ai' },
-        { name: 'Điện thoại', tag: 'mobile' },
-        { name: 'Máy tính', tag: 'computer' },
-        { name: 'Internet', tag: 'internet' },
-      ]
+      subcategories: []
     },
     {
       title: 'Scraper',
@@ -55,26 +51,8 @@ function Navigation() {
     }
   ];
 
-  const handleSubcategoryClick = (path, tag) => {
-    if (tag) {
-      navigate(`${path}?tag=${tag}`);
-    } else {
-      navigate(path);
-    }
-  };
-
   const isActive = (category) => {
-    if (location.pathname !== category.path) return false;
-    
-    if (category.subcategories.length === 0) {
-      return true;
-    }
-    
-    if (category.defaultTag) {
-      return currentTag === category.defaultTag;
-    }
-    
-    return !currentTag || currentTag === '';
+    return location.pathname === category.path;
   };
 
   return (
@@ -84,35 +62,35 @@ function Navigation() {
           <Link to="/" className="text-[26px] font-bold text-[#9f224e] tracking-tight">
             NewsHub
           </Link>
+
+          <div className="hidden md:block mx-4">
+            <select 
+              value={currentSourceId || ''} 
+              onChange={(e) => handleSourceChange(e.target.value)}
+              className="select select-bordered select-sm text-[13px] w-[180px] border-gray-300 focus:border-[#9f224e] focus:outline-none"
+            >
+              <option value="">All Sources</option>
+              {sources.map(source => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
+          </div>
           
           <nav className="hidden md:flex items-center h-full">
             {categories.map((category, index) => (
-              <div key={index} className="relative group h-full flex items-center">
-                <Link
-                  to={category.defaultTag ? `${category.path}?tag=${category.defaultTag}` : category.path}
-                  className={`px-4 h-full flex items-center text-[13px] hover:text-[#9f224e] transition-colors border-b-2 ${
-                    isActive(category)
-                      ? 'text-[#9f224e] border-[#9f224e] font-semibold' 
-                      : 'border-transparent'
-                  }`}
-                >
-                  {category.title}
-                </Link>
-                
-                {category.subcategories.length > 0 && (
-                  <div className="absolute top-full left-0 bg-white border border-gray-200 shadow-lg min-w-[200px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                    {category.subcategories.map((sub, subIndex) => (
-                      <button
-                        key={subIndex}
-                        onClick={() => handleSubcategoryClick(category.path, sub.tag)}
-                        className="block w-full text-left px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 hover:text-[#9f224e] transition-colors"
-                      >
-                        {sub.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Link
+                key={index}
+                to={category.path}
+                className={`px-4 h-full flex items-center text-[13px] hover:text-[#9f224e] transition-colors border-b-2 ${
+                  isActive(category)
+                    ? 'text-[#9f224e] border-[#9f224e] font-semibold' 
+                    : 'border-transparent'
+                }`}
+              >
+                {category.title}
+              </Link>
             ))}
           </nav>
 
@@ -131,33 +109,16 @@ function Navigation() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white">
             {categories.map((category, index) => (
-              <div key={index} className="border-b border-gray-100">
-                <Link
-                  to={category.defaultTag ? `${category.path}?tag=${category.defaultTag}` : category.path}
-                  className={`block px-4 py-3 text-sm hover:bg-gray-50 ${
-                    isActive(category) ? 'text-[#9f224e] font-semibold bg-gray-50' : ''
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {category.title}
-                </Link>
-                {category.subcategories.length > 0 && (
-                  <div className="bg-gray-50 pl-8">
-                    {category.subcategories.map((sub, subIndex) => (
-                      <button
-                        key={subIndex}
-                        onClick={() => {
-                          handleSubcategoryClick(category.path, sub.tag);
-                          setMobileMenuOpen(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-600 hover:text-[#9f224e]"
-                      >
-                        {sub.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Link
+                key={index}
+                to={category.path}
+                className={`block px-4 py-3 text-sm hover:bg-gray-50 border-b border-gray-100 ${
+                  isActive(category) ? 'text-[#9f224e] font-semibold bg-gray-50' : ''
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {category.title}
+              </Link>
             ))}
           </div>
         )}
