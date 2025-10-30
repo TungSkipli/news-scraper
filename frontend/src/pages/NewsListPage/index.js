@@ -15,6 +15,7 @@ function NewsListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
   const [sortBy, setSortBy] = useState('desc');
+  const [dateRange, setDateRange] = useState('');
 
   const limit = 12;
 
@@ -30,7 +31,7 @@ function NewsListPage() {
 
   useEffect(() => {
     fetchArticles();
-  }, [currentPage, search, selectedCategory, sortBy]);
+  }, [currentPage, search, selectedCategory, sortBy, dateRange]);
 
   const fetchArticles = async () => {
     try {
@@ -42,7 +43,8 @@ function NewsListPage() {
         limit: limit,
         search: search || '',
         category: selectedCategory || '',
-        sortBy: sortBy
+        sortBy: sortBy,
+        dateRange: dateRange || ''
       };
       
       const response = await getNews(params);
@@ -95,7 +97,10 @@ function NewsListPage() {
     setCurrentPage(1);
   };
 
-
+  const handleDateRangeChange = (newDateRange) => {
+    setDateRange(newDateRange);
+    setCurrentPage(1);
+  };
 
   const renderPagination = () => {
     const totalPages = Math.ceil(totalArticles / limit);
@@ -177,6 +182,18 @@ function NewsListPage() {
               <option value="asc">Oldest First</option>
               <option value="title-asc">Title (A-Z)</option>
               <option value="title-desc">Title (Z-A)</option>
+            </select>
+            <select
+              value={dateRange}
+              onChange={(e) => handleDateRangeChange(e.target.value)}
+              className="select select-bordered"
+            >
+              <option value="">All Time</option>
+              <option value="recent">Mới đây (24h)</option>
+              <option value="yesterday">Hôm qua</option>
+              <option value="week">Trong 1 tuần</option>
+              <option value="month">Trong 1 tháng</option>
+              <option value="year">Trong 1 năm</option>
             </select>
           </div>
         </div>

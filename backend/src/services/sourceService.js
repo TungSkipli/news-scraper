@@ -336,7 +336,7 @@ const getArticles = async (filters = {}) => {
     }
 
     // Sort by date
-    articles.sort((a, b) => (b.published_at || b.created_at || 0) - (a.published_at || a.created_at || 0));
+    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
 
     // Apply limit
     if (filters.limit) {
@@ -411,7 +411,7 @@ const getArticlesByCategory = async (categoryId, limit = 50) => {
     articles = articles.filter(a => a.category_id === categoryId);
     
     // Sort by date
-    articles.sort((a, b) => (b.published_at || b.created_at || 0) - (a.published_at || a.created_at || 0));
+    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
     
     // Apply limit
     if (limit) {

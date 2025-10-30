@@ -11,7 +11,7 @@ const {
 
 const getNews = async (req, res, next) => {
   try {
-    const { page, limit, search, tag, category, sortBy } = req.query;
+    const { page, limit, search, tag, category, sortBy, dateRange } = req.query;
     
     const result = await getAllNews({
       page: parseInt(page) || 1,
@@ -19,7 +19,8 @@ const getNews = async (req, res, next) => {
       search: search || '',
       tag: tag || '',
       category: category || '',
-      sortBy: sortBy || 'desc'
+      sortBy: sortBy || 'desc',
+      dateRange: dateRange || ''
     });
 
     res.json({
@@ -35,12 +36,13 @@ const getNews = async (req, res, next) => {
 const getNewsByCategoryController = async (req, res, next) => {
   try {
     const { category } = req.params;
-    const { page, limit, sortBy } = req.query;
+    const { page, limit, sortBy, dateRange } = req.query;
     
     const result = await getNewsByCategory(category, {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 12,
-      sortBy: sortBy || 'desc'
+      sortBy: sortBy || 'desc',
+      dateRange: dateRange || ''
     });
 
     res.json({

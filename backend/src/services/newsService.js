@@ -1,6 +1,41 @@
 const { db, algoliaClient, algoliaIndexName } = require('../config/firebase');
 const { FIREBASE_COLLECTIONS, normalizeCategory } = require('../utils/constants');
 
+const getIndexName = (sortBy) => {
+  const indexMap = {
+    'desc': `${algoliaIndexName}_published_desc`,
+    'asc': `${algoliaIndexName}_published_asc`,
+    'title-asc': `${algoliaIndexName}_title_asc`,
+    'title-desc': `${algoliaIndexName}_title_desc`
+  };
+  
+  const selectedIndex = indexMap[sortBy] || algoliaIndexName;
+  console.log(`[getIndexName] sortBy: ${sortBy} -> index: ${selectedIndex}`);
+  return selectedIndex;
+};
+
+const getDateRangeTimestamp = (dateRange) => {
+  const now = Date.now();
+  
+  switch(dateRange) {
+    case 'recent':
+      return now - (24 * 60 * 60 * 1000);
+    case 'yesterday':
+      const startOfYesterday = new Date();
+      startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+      startOfYesterday.setHours(0, 0, 0, 0);
+      return startOfYesterday.getTime();
+    case 'week':
+      return now - (7 * 24 * 60 * 60 * 1000);
+    case 'month':
+      return now - (30 * 24 * 60 * 60 * 1000);
+    case 'year':
+      return now - (365 * 24 * 60 * 60 * 1000);
+    default:
+      return null;
+  }
+};
+
 const getCategoryCollection = (category) => {
   return db
     .collection(FIREBASE_COLLECTIONS.NEWS)
@@ -22,19 +57,34 @@ const getAllCategories = async () => {
   }
 };
 
-const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '', category = '', sortBy = 'desc' }) => {
+const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '', category = '', sortBy = 'desc', dateRange = '' }) => {
   try {
+    console.log(`[getAllNews] dateRange: ${dateRange}, sortBy: ${sortBy}`);
+    
     const filters = [];
     if (category) {
       filters.push(`category:${category}`);
     }
 
+    if (dateRange) {
+      const minTimestamp = getDateRangeTimestamp(dateRange);
+      console.log(`[getAllNews] dateRange: ${dateRange} -> minTimestamp: ${minTimestamp}`);
+      if (minTimestamp) {
+        const filter = `published_at >= ${minTimestamp}`;
+        console.log(`[getAllNews] Adding filter: ${filter}`);
+        filters.push(filter);
+      }
+    }
+    
+    console.log(`[getAllNews] Final filters: ${filters.join(' AND ')}`);
+
     const { results } = await algoliaClient.search({
       requests: [
         {
-          indexName: algoliaIndexName,
+          indexName: getIndexName(sortBy),
           query: search || '',
-          hitsPerPage: 1000,
+          hitsPerPage: limit,
+          page: page - 1,
           filters: filters.join(' AND '),
           facets: ['category']
         }
@@ -42,7 +92,7 @@ const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '', categor
     });
 
     const searchResult = results[0];
-    let articles = searchResult.hits.map(hit => ({
+    const articles = searchResult.hits.map(hit => ({
       id: hit.objectID,
       title: hit.title,
       summary: hit.summary,
@@ -51,24 +101,11 @@ const getAllNews = async ({ page = 1, limit = 12, search = '', tag = '', categor
       published_at: hit.published_at
     }));
 
-    articles.sort((a, b) => {
-      if (sortBy === 'asc') {
-        return (a.published_at || 0) - (b.published_at || 0);
-      } else if (sortBy === 'title-asc') {
-        return (a.title || '').localeCompare(b.title || '');
-      } else if (sortBy === 'title-desc') {
-        return (b.title || '').localeCompare(a.title || '');
-      }
-      return (b.published_at || 0) - (a.published_at || 0);
-    });
-
-    const total = articles.length;
+    const total = searchResult.nbHits;
     const totalPages = Math.ceil(total / limit);
-    const startIndex = (page - 1) * limit;
-    const paginatedArticles = articles.slice(startIndex, startIndex + limit);
 
     return {
-      articles: paginatedArticles,
+      articles: articles,
       pagination: {
         page,
         limit,
@@ -191,12 +228,12 @@ const getFeaturedNews = async ({ limit = 6 }) => {
         {
           indexName: algoliaIndexName,
           query: '',
-          hitsPerPage: limit * 2
+          hitsPerPage: limit
         }
       ]
     });
 
-    let articles = results[0].hits.map(hit => ({
+    const articles = results[0].hits.map(hit => ({
       id: hit.objectID,
       title: hit.title,
       summary: hit.summary,
@@ -205,9 +242,7 @@ const getFeaturedNews = async ({ limit = 6 }) => {
       published_at: hit.published_at
     }));
 
-    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
-
-    return articles.slice(0, limit);
+    return articles;
   } catch (error) {
     console.error('[getFeaturedNews] Error:', error);
     throw error;
@@ -221,12 +256,12 @@ const getLatestNews = async ({ limit = 10 }) => {
         {
           indexName: algoliaIndexName,
           query: '',
-          hitsPerPage: limit * 2
+          hitsPerPage: limit
         }
       ]
     });
 
-    let articles = results[0].hits.map(hit => ({
+    const articles = results[0].hits.map(hit => ({
       id: hit.objectID,
       title: hit.title,
       summary: hit.summary,
@@ -235,30 +270,38 @@ const getLatestNews = async ({ limit = 10 }) => {
       published_at: hit.published_at
     }));
 
-    articles.sort((a, b) => (b.published_at || 0) - (a.published_at || 0));
-
-    return articles.slice(0, limit);
+    return articles;
   } catch (error) {
     console.error('[getLatestNews] Error:', error);
     throw error;
   }
 };
 
-const getNewsByCategory = async (category, { page = 1, limit = 12, sortBy = 'desc' }) => {
+const getNewsByCategory = async (category, { page = 1, limit = 12, sortBy = 'desc', dateRange = '' }) => {
   try {
+    const filters = [`category:${category}`];
+
+    if (dateRange) {
+      const minTimestamp = getDateRangeTimestamp(dateRange);
+      if (minTimestamp) {
+        filters.push(`published_at >= ${minTimestamp}`);
+      }
+    }
+
     const { results } = await algoliaClient.search({
       requests: [
         {
-          indexName: algoliaIndexName,
+          indexName: getIndexName(sortBy),
           query: '',
-          hitsPerPage: 1000,
-          filters: `category:${category}`
+          hitsPerPage: limit,
+          page: page - 1,
+          filters: filters.join(' AND ')
         }
       ]
     });
 
     const searchResult = results[0];
-    let articles = searchResult.hits.map(hit => ({
+    const articles = searchResult.hits.map(hit => ({
       id: hit.objectID,
       title: hit.title,
       summary: hit.summary,
@@ -267,24 +310,11 @@ const getNewsByCategory = async (category, { page = 1, limit = 12, sortBy = 'des
       published_at: hit.published_at
     }));
 
-    articles.sort((a, b) => {
-      if (sortBy === 'asc') {
-        return (a.published_at || 0) - (b.published_at || 0);
-      } else if (sortBy === 'title-asc') {
-        return (a.title || '').localeCompare(b.title || '');
-      } else if (sortBy === 'title-desc') {
-        return (b.title || '').localeCompare(a.title || '');
-      }
-      return (b.published_at || 0) - (a.published_at || 0);
-    });
-
-    const total = articles.length;
+    const total = searchResult.nbHits;
     const totalPages = Math.ceil(total / limit);
-    const startIndex = (page - 1) * limit;
-    const paginatedArticles = articles.slice(startIndex, startIndex + limit);
 
     return {
-      articles: paginatedArticles,
+      articles: articles,
       pagination: {
         page,
         limit,

@@ -192,7 +192,6 @@ const scrapeSourceController = async (req, res, next) => {
       });
     }
 
-    // Full source mode
     const scrapeOptions = {
       maxCategoriesPerSource: options?.maxCategories || 5,
       maxPagesPerCategory: options?.maxPages || 2,
@@ -217,10 +216,6 @@ const scrapeSourceController = async (req, res, next) => {
   }
 };
 
-/**
- * Detect categories from homepage
- * POST /scrape/detect
- */
 const detectCategoriesController = async (req, res, next) => {
   try {
     const { url } = req.body;

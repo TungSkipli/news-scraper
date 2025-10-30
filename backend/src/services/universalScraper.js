@@ -16,9 +16,6 @@ puppeteer.use(StealthPlugin());
 
 const createSlug = generateSlug;
 
-/**
- * Extract article data from page
- */
 const extractArticleData = async (page, url) => {
   return await page.evaluate(({ selectors, url }) => {
     const trySelectors = (selectorList, extractor) => {
@@ -166,16 +163,10 @@ const extractArticleData = async (page, url) => {
   }, { selectors: UNIVERSAL_SELECTORS, url });
 };
 
-/**
- * Create browser instance
- */
 const createBrowser = async () => {
   return await puppeteer.launch(BROWSER_CONFIG);
 };
 
-/**
- * Setup page with configurations
- */
 const setupPage = async (browser, url) => {
   const page = await browser.newPage();
   
@@ -194,7 +185,6 @@ const setupPage = async (browser, url) => {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   );
 
-  // Block unnecessary resources
   await page.setRequestInterception(true);
   page.on('request', (request) => {
     const resourceType = request.resourceType();
@@ -226,14 +216,6 @@ const parseDate = (dateString) => {
   return Date.now();
 };
 
-/**
- * Extract category from URL path
- * Tries to find a valid category from URL segments
- * 
- * @param {string} url - Article URL
- * @param {object} articleData - Optional article data for additional context
- * @returns {string} Detected category or 'uncategorized'
- */
 const extractCategoryFromUrl = (url, articleData = null) => {
   try {
     const urlObj = new URL(url);
@@ -242,7 +224,6 @@ const extractCategoryFromUrl = (url, articleData = null) => {
     console.log(`[extractCategoryFromUrl] Analyzing URL: ${url}`);
     console.log(`[extractCategoryFromUrl] Path parts: ${pathParts.join(', ')}`);
     
-    // Try each path segment
     for (const part of pathParts) {
       const normalized = normalizeCategory(part);
       
@@ -251,8 +232,7 @@ const extractCategoryFromUrl = (url, articleData = null) => {
         return normalized;
       }
     }
-    
-    // Try to extract from article tags if available
+
     if (articleData && articleData.tags && articleData.tags.length > 0) {
       console.log(`[extractCategoryFromUrl] Trying tags: ${articleData.tags.join(', ')}`);
       for (const tag of articleData.tags) {
@@ -273,9 +253,6 @@ const extractCategoryFromUrl = (url, articleData = null) => {
   }
 };
 
-/**
- * Scrape article from URL
- */
 const scrapeUrl = async (url, retryCount = 0) => {
   let browser;
   let page;
@@ -295,7 +272,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
 
     await new Promise(resolve => setTimeout(resolve, SCRAPER_CONFIG.PAGE_LOAD_DELAY));
 
-    // Scroll to trigger lazy loading
     await page.evaluate(() => {
       window.scrollTo(0, document.body.scrollHeight / 2);
     });
@@ -309,7 +285,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
       throw new Error('Could not extract title from the page');
     }
 
-    // Extract category from URL first, then fallback to tags if needed
     const category = extractCategoryFromUrl(url, rawData);
 
     const article = {
@@ -327,14 +302,10 @@ const scrapeUrl = async (url, retryCount = 0) => {
       category: category,
       external_source: url,
       published_at: parseDate(rawData.publishedDate),
-      created_at: Date.now(),
       slug: createSlug(rawData.title),
       likes: DEFAULT_VALUES.LIKES
     };
-    
-    console.log(`[scrapeUrl] ✅ Article scraped successfully`);
-    console.log(`[scrapeUrl] Title: ${article.title}`);
-    console.log(`[scrapeUrl] Category: ${article.category}`);
+
 
     return article;
 
@@ -353,18 +324,11 @@ const scrapeUrl = async (url, retryCount = 0) => {
   }
 };
 
-/**
- * Scrape and save article to Firebase
- * Path: news/articles/{category}/:id
- * NOTE: This function does NOT check for duplicates!
- * Use sourceService.saveArticle() for duplicate checking.
- */
 const scrapeAndSave = async (url) => {
   try {
     console.log(`[scrapeAndSave] 🔍 Scraping URL: ${url}`);
     const article = await scrapeUrl(url);
 
-    // Check if article already exists by URL
     const categoryRef = db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
@@ -390,11 +354,7 @@ const scrapeAndSave = async (url) => {
       };
     }
 
-    // Save to: news/articles/{category}/:id
     const docRef = await categoryRef.add(article);
-
-    console.log(`[scrapeAndSave] ✅ NEW article saved to: news/articles/${article.category}/${docRef.id}`);
-    console.log(`[scrapeAndSave] Title: ${article.title}`);
 
     await algoliaClient.saveObject({
       indexName: algoliaIndexName,
