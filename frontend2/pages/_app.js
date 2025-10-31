@@ -4,6 +4,7 @@ import { appWithTranslation } from 'next-i18next'
 import Head from 'next/head'
 import { createEmotionCache } from '../src/utils/createEmotionCache'
 import theme from '../src/theme'
+import Header from '../src/components/layout/Header'
 
 const clientSideEmotionCache = createEmotionCache()
 
@@ -15,6 +16,7 @@ function MyApp({ Component, emotionCache = clientSideEmotionCache, pageProps }) 
       </Head>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <Header />
         <Component {...pageProps} />
       </ThemeProvider>
     </CacheProvider>

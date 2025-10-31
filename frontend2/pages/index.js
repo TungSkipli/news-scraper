@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useRouter } from 'next/router'
 import { Container, Typography, Box, Grid, Button, Stack, Paper, Divider } from '@mui/material'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
-import StatsBar from '../src/components/home/StatsBar'
+// import StatsBar from '../src/components/home/StatsBar'
 import FeaturedArticle from '../src/components/home/FeaturedArticle'
 import ArticleCard from '../src/components/home/ArticleCard'
 import SidebarArticle from '../src/components/home/SidebarArticle'
@@ -40,7 +40,7 @@ const HomePageContent = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
-      <StatsBar stats={stats} />
+      {/* <StatsBar stats={stats} /> */}
       <Container maxWidth="lg" sx={{ py: 6 }}>
         <Grid container spacing={{ xs: 4, md: 6 }}>
           <Grid item xs={12} lg={8}>
