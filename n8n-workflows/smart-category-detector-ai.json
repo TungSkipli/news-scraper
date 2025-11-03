@@ -1,0 +1,263 @@
+{
+  "name": "Smart Category Detector with AI",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "detect-categories-ai",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "smart-category-detector"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.backend_url || 'http://localhost:5000'}}/api/scrape/detect-categories",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{$json.homepage_url}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "detect-categories-api",
+      "name": "Detect Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.success}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-detection-success",
+      "name": "Check Detection Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "chatId": "gpt-4",
+        "text": "={{JSON.stringify($json.data)}}",
+        "additionalFields": {
+          "systemMessage": "Bạn là AI Agent chuyên phân tích và nhóm categories tin tức dựa trên ngữ nghĩa (semantic reasoning).\n\n## NHIỆM VỤ CHÍNH: SEMANTIC GROUPING & NORMALIZATION\n\n### 1. PHÁT HIỆN CATEGORIES TƯƠNG TỰ\n\n**Nguyên tắc nhóm theo ngữ nghĩa:**\n- **Cùng chủ đề**: \"Làm đẹp\", \"Trang điểm\", \"Makeup\", \"Chăm sóc da\" → GỘP thành \"Làm đẹp\"\n- **Cùng từ gốc**: \"Thời trang nam\", \"Thời trang nữ\", \"Xu hướng thời trang\" → GỘP thành \"Thời trang\"\n- **Quan hệ cha-con**: \"Bóng đá VN\", \"Bóng đá QT\", \"V-League\" → GỘP thành \"Bóng đá\"\n- **Đồng nghĩa**: \"Mẹo vặt\" ≈ \"Thủ thuật\" ≈ \"Kinh nghiệm\" → GỘP\n- **Chi tiết của tổng quát**: \"iPhone\", \"Samsung\", \"Xiaomi\" → GỘP thành \"Điện thoại\"\n- **Màu sắc**: \"Màu xanh đậm\", \"Màu xanh nhạt\", \"Xanh da trời\" → GỘP thành \"Màu xanh\"\n\n**Logic suy luận:**\n```\nIF category A và B có:\n  - Chứa từ khóa chung (vd: \"bóng đá\", \"thời trang\")\n  - Hoặc quan hệ ngữ nghĩa (makeup ⊂ beauty)\n  - Hoặc đồng nghĩa (\"mẹo đẹp\" ≈ \"làm đẹp\")\n  - Hoặc cùng semantic field (iPhone, Samsung → điện thoại)\nTHEN:\n  - Gộp vào parent category\n  - Đặt tên parent là khái niệm TỔNG QUÁT NHẤT\n  - Lưu mapping: subcategories → parent\n```\n\n### 2. CHUẨN HÓA TÊN CATEGORY\n\n**Quy tắc:**\n- Dùng tên **TỔNG QUÁT, PHỔ BIẾN** nhất\n- Ưu tiên tên **NGẮN GỌN**\n- Loại bỏ từ thừa: \"Tin về thời trang\" → \"Thời trang\"\n\n**Ví dụ chuẩn hóa:**\n```\nInput                    →  Parent Category\n──────────────────────────────────────────\n\"Làm đẹp\"               →  \"Làm đẹp\" ✓\n\"Trang điểm\"            ↗\n\"Makeup\"                ↗\n\"Chăm sóc da\"           ↗\n\"Mẹo đẹp\"               ↗\n\n\"Thời trang nam\"        →  \"Thời trang\" ✓\n\"Thời trang nữ\"         ↗\n\"Street style\"          ↗\n\n\"Bóng đá VN\"            →  \"Bóng đá\" ✓\n\"Bóng đá QT\"            ↗\n\"V-League\"              ↗\n\n\"Màu xanh đậm\"          →  \"Màu xanh\" ✓\n\"Màu xanh nhạt\"         ↗\n\"Xanh da trời\"          ↗\n```\n\n### 3. PRIORITIZATION\n\n**Tiêu chí (điểm 1-10):**\n1. **News Value** (40%):\n   - Thời sự, Chính trị: 10\n   - Kinh tế: 9\n   - Công nghệ: 8\n   - Sức khỏe, Giáo dục: 7\n   - Thể thao: 6\n   - Giải trí: 5\n\n2. **Độ bao quát** (30%): Category gộp nhiều sub → cao\n3. **URL quality** (20%): URL parent thường có nhiều bài\n4. **Không trùng lặp** (10%): Chỉ chọn 1 đại diện/nhóm\n\n**Loại trừ:**\n- ❌ Quảng cáo: \"Rao vặt\", \"Khuyến mãi\"\n- ❌ Spam: \"Video hot\", \"Hot girl\"\n- ❌ Phụ: \"RSS\", \"Sitemap\", \"Liên hệ\"\n\n## OUTPUT FORMAT (CHỈ JSON, KHÔNG MARKDOWN):\n\n{\n  \"normalized_categories\": [\n    {\n      \"parent_name\": \"Làm đẹp\",\n      \"parent_url\": \"https://example.com/lam-dep\",\n      \"priority\": 1,\n      \"score\": 8.5,\n      \"subcategories\": [\n        {\n          \"original_name\": \"Trang điểm\",\n          \"url\": \"https://example.com/trang-diem\",\n          \"relationship\": \"child\",\n          \"semantic_similarity\": 0.92\n        },\n        {\n          \"original_name\": \"Mẹo đẹp\",\n          \"url\": \"https://example.com/meo-dep\",\n          \"relationship\": \"synonym\",\n          \"semantic_similarity\": 0.95\n        }\n      ],\n      \"reasoning\": \"Gộp 3 categories về beauty/makeup. Trang điểm, mẹo đẹp đều là phần của làm đẹp. Chọn URL /lam-dep vì tổng quát nhất.\",\n      \"scrape_strategy\": \"primary\",\n      \"estimated_articles\": 50\n    }\n  ],\n  \"scrape_config\": {\n    \"total_parent_categories\": 3,\n    \"selected_for_scraping\": [\n      {\n        \"category\": \"Làm đẹp\",\n        \"url\": \"https://example.com/lam-dep\",\n        \"maxArticles\": 50\n      }\n    ],\n    \"maxPages\": 2,\n    \"maxArticlesPerCategory\": 20\n  },\n  \"semantic_analysis\": {\n    \"grouping_method\": \"hierarchical_semantic_clustering\",\n    \"similarity_threshold\": 0.75\n  }\n}\n\n## YÊU CẦU:\n1. ✅ Phát hiện categories tương tự (similarity ≥ 0.75)\n2. ✅ Gộp vào parent hợp lý\n3. ✅ Chọn URL tốt nhất (tổng quát/nhiều content)\n4. ✅ Giải thích reasoning\n5. ✅ Return ONLY valid JSON (không markdown)\n6. ✅ Semantic similarity score thực tế (0.0-1.0)\n\nHãy suy luận như con người và trả về JSON chuẩn!"
+        }
+      },
+      "id": "ai-analyze-categories",
+      "name": "AI Analyze Categories",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [850, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const aiResponse = $input.item.json.message;\nconst detectionData = $node[\"Detect Categories\"].json.data;\n\nlet aiDecision;\ntry {\n  const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n  aiDecision = JSON.parse(jsonMatch ? jsonMatch[0] : aiResponse);\n} catch (error) {\n  throw new Error('AI did not return valid JSON: ' + aiResponse);\n}\n\nconst output = {\n  url: detectionData.source.homepage_url,\n  options: {\n    mode: \"auto\",\n    selectedCategories: aiDecision.scrape_config.selected_for_scraping.map(cat => ({\n      name: cat.category,\n      url: cat.url\n    })),\n    maxPages: aiDecision.scrape_config.maxPages || 2,\n    maxArticlesPerCategory: aiDecision.scrape_config.maxArticlesPerCategory || 20,\n    maxArticles: aiDecision.scrape_config.selected_for_scraping.reduce((sum, cat) => sum + (cat.maxArticles || 20), 0),\n    metadata: {\n      ai_normalized_categories: aiDecision.normalized_categories,\n      source: detectionData.source\n    }\n  }\n};\n\nreturn { json: output };"
+      },
+      "id": "transform-for-backend",
+      "name": "Transform for Backend",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.backend_url || 'http://localhost:5000'}}/api/scrape/source",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "sendBodyAsJson": true,
+        "bodyParametersJson": "={{JSON.stringify($json)}}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "scrape-selected-categories",
+      "name": "Scrape Selected Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "summary",
+              "value": "={{$json.message}}"
+            },
+            {
+              "name": "total_articles",
+              "value": "={{$json.data.articles.success}}"
+            },
+            {
+              "name": "duplicates",
+              "value": "={{$json.data.articles.duplicates}}"
+            },
+            {
+              "name": "failed",
+              "value": "={{$json.data.articles.failed}}"
+            },
+            {
+              "name": "categories_scraped",
+              "value": "={{$json.data.categories.length}}"
+            }
+          ]
+        }
+      },
+      "id": "format-success-response",
+      "name": "Format Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify({\n  success: true,\n  message: $json.summary,\n  data: {\n    total_articles: $json.total_articles,\n    duplicates: $json.duplicates,\n    failed: $json.failed,\n    categories_scraped: $json.categories_scraped,\n    full_response: $node['Scrape Selected Categories'].json\n  }\n})}}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify({\n  success: false,\n  message: 'Category detection failed',\n  error: $json.error || 'Unknown error'\n})}}",
+        "options": {}
+      },
+      "id": "respond-detection-error",
+      "name": "Respond Detection Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Detect Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Categories": {
+      "main": [
+        [
+          {
+            "node": "Check Detection Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Detection Success": {
+      "main": [
+        [
+          {
+            "node": "AI Analyze Categories",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Detection Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analyze Categories": {
+      "main": [
+        [
+          {
+            "node": "Transform for Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform for Backend": {
+      "main": [
+        [
+          {
+            "node": "Scrape Selected Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Selected Categories": {
+      "main": [
+        [
+          {
+            "node": "Format Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Success Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

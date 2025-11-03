@@ -2,6 +2,7 @@ const { scrapeUrl, scrapeAndSave } = require('../services/universalScraper');
 const { scrapeEntireSource, scrapeSingleCategory } = require('../services/sourceOrchestrator');
 const { detectCategories } = require('../services/homepageDetector');
 const { validateUrl, validateUrlArray } = require('../utils/validators');
+const { db, admin } = require('../config/firebase');
 
 const scrapeUrlController = async (req, res, next) => {
   try {
@@ -161,7 +162,86 @@ const scrapeSourceController = async (req, res, next) => {
       });
     }
 
-    // Single category mode
+    if (options?.mode === 'auto' && options?.selectedCategories) {
+      const detection = await detectCategories(url);
+      
+      const results = {
+        success: true,
+        source: detection.source,
+        categories: [],
+        articles: {
+          total: 0,
+          success: 0,
+          failed: 0,
+          duplicates: 0,
+          details: []
+        },
+        ai_metadata: options.metadata || null
+      };
+
+      if (options.metadata) {
+        try {
+          const normalizedData = {
+            source_domain: detection.source.domain,
+            source_name: detection.source.name,
+            homepage_url: url,
+            normalized_categories: options.metadata.ai_normalized_categories || [],
+            original_categories: detection.categories,
+            scrape_config: {
+              selected_for_scraping: options.selectedCategories,
+              maxPages: options.maxPages || 2,
+              maxArticlesPerCategory: options.maxArticlesPerCategory || 20
+            },
+            semantic_analysis: options.metadata.semantic_analysis || {},
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            created_by: 'n8n-gemini-ai-agent'
+          };
+
+          const docId = `${detection.source.domain}_${Date.now()}`;
+          await db.collection('normalized_categories').doc(docId).set(normalizedData);
+          
+          results.firestore_saved = true;
+          results.firestore_doc_id = docId;
+          console.log(`[scrapeSourceController] Saved normalized categories to Firestore: ${docId}`);
+        } catch (error) {
+          console.error('[scrapeSourceController] Error saving to Firestore:', error);
+          results.firestore_saved = false;
+          results.firestore_error = error.message;
+        }
+      }
+
+      for (const selectedCat of options.selectedCategories) {
+        try {
+          const categoryResults = await scrapeSingleCategory(
+            selectedCat.url,
+            detection.source,
+            {
+              maxPages: options?.maxPages || 2,
+              maxArticles: options?.maxArticlesPerCategory || 20
+            }
+          );
+
+          results.categories.push(categoryResults.category);
+          results.articles.total += categoryResults.articles.total;
+          results.articles.success += categoryResults.articles.success;
+          results.articles.failed += categoryResults.articles.failed;
+          results.articles.duplicates += categoryResults.articles.duplicates;
+
+          console.log(`[scrapeSourceController] AI selected category "${selectedCat.name}" completed: ${categoryResults.articles.success} success, ${categoryResults.articles.duplicates} duplicates`);
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+          console.error(`[scrapeSourceController] Error scraping AI selected category "${selectedCat.name}":`, error);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `AI auto-selection mode completed: ${results.articles.success} articles scraped from ${results.categories.length} categories`,
+        data: results
+      });
+    }
+
     if (options?.mode === 'single' && options?.categoryUrl) {
       const detection = await detectCategories(url);
       const category = detection.categories.find(cat => cat.url === options.categoryUrl);

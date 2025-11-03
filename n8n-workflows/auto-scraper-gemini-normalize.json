@@ -1,0 +1,333 @@
+{
+  "name": "Auto Scraper with Gemini AI Normalization",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-scraper-gemini",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "auto-scraper-gemini"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.backend_url || 'http://localhost:5000'}}/api/scrape/detect-categories",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{$json.homepage_url}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "detect-categories",
+      "name": "Detect Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.success}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-detection-success",
+      "name": "Check Detection Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "sendBodyAsJson": true,
+        "bodyParametersJson": "={{JSON.stringify({\n  contents: [{\n    parts: [{\n      text: `Bạn là AI Agent chuyên phân tích và nhóm categories tin tức dựa trên ngữ nghĩa.\n\n## NHIỆM VỤ: SEMANTIC GROUPING & NORMALIZATION\n\n### 1. PHÁT HIỆN VÀ GỘP CATEGORIES TƯƠNG TỰ\n\n**Nguyên tắc nhóm:**\n- **Cùng chủ đề**: \"Làm đẹp\", \"Trang điểm\", \"Makeup\" → GỘP thành \"Làm đẹp\"\n- **Cùng từ gốc**: \"Thời trang nam\", \"Thời trang nữ\" → GỘP thành \"Thời trang\"\n- **Cha-con**: \"Bóng đá VN\", \"Bóng đá QT\", \"V-League\" → GỘP thành \"Bóng đá\"\n- **Đồng nghĩa**: \"Mẹo vặt\" ≈ \"Thủ thuật\" → GỘP\n- **Chi tiết → tổng quát**: \"iPhone\", \"Samsung\" → GỘP thành \"Điện thoại\"\n- **Màu sắc**: \"Màu xanh đậm\", \"Màu xanh nhạt\" → GỘP thành \"Màu xanh\"\n\n**Logic:**\nIF categories có:\n  - Từ khóa chung (\"bóng đá\", \"thời trang\")\n  - Quan hệ ngữ nghĩa (makeup ⊂ beauty)\n  - Đồng nghĩa (\"mẹo đẹp\" ≈ \"làm đẹp\")\nTHEN:\n  - Gộp vào parent category\n  - Tên parent = khái niệm TỔNG QUÁT nhất\n\n### 2. CHUẨN HÓA TÊN\n- Tên **TỔNG QUÁT, PHỔ BIẾN**\n- **NGẮN GỌN**\n- Loại bỏ thừa: \"Tin về thời trang\" → \"Thời trang\"\n\n### 3. PRIORITIZATION (điểm 1-10)\n- Thời sự, Chính trị: 10\n- Kinh tế: 9\n- Công nghệ: 8\n- Sức khỏe, Giáo dục: 7\n- Thể thao: 6\n- Giải trí: 5\n\n**Loại trừ:** Quảng cáo, Rao vặt, RSS, Sitemap, Liên hệ\n\n### OUTPUT (CHỈ JSON, KHÔNG MARKDOWN):\n\n{\n  \"normalized_categories\": [\n    {\n      \"parent_name\": \"Làm đẹp\",\n      \"parent_url\": \"https://example.com/lam-dep\",\n      \"priority\": 1,\n      \"score\": 8.5,\n      \"subcategories\": [\n        {\n          \"original_name\": \"Trang điểm\",\n          \"url\": \"https://example.com/trang-diem\",\n          \"relationship\": \"child\",\n          \"semantic_similarity\": 0.92\n        }\n      ],\n      \"reasoning\": \"Gộp categories về beauty. Chọn /lam-dep vì tổng quát.\",\n      \"estimated_articles\": 50\n    }\n  ],\n  \"scrape_config\": {\n    \"selected_for_scraping\": [\n      {\n        \"category\": \"Làm đẹp\",\n        \"url\": \"https://example.com/lam-dep\",\n        \"maxArticles\": 50\n      }\n    ],\n    \"maxPages\": 2,\n    \"maxArticlesPerCategory\": 20\n  },\n  \"semantic_analysis\": {\n    \"grouping_method\": \"semantic_clustering\",\n    \"similarity_threshold\": 0.75\n  }\n}\n\nReturn ONLY valid JSON!\n\n---\n\nData to analyze:\n` + JSON.stringify($json.data)\n    }]\n  }],\n  generationConfig: {\n    temperature: 0.7,\n    maxOutputTokens: 2048\n  }\n})}}",
+        "options": {}
+      },
+      "id": "gemini-ai-normalize",
+      "name": "Gemini AI Normalize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Gemini API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const geminiResponse = $input.item.json;\nconst detectionData = $node['Detect Categories'].json.data;\n\nlet aiText;\nif (geminiResponse.candidates && geminiResponse.candidates[0]) {\n  aiText = geminiResponse.candidates[0].content.parts[0].text;\n} else if (geminiResponse.text) {\n  aiText = geminiResponse.text;\n} else {\n  throw new Error('Gemini did not return valid response structure');\n}\n\nlet aiDecision;\ntry {\n  const jsonMatch = aiText.match(/\\{[\\s\\S]*\\}/);\n  const jsonString = jsonMatch ? jsonMatch[0] : aiText;\n  aiDecision = JSON.parse(jsonString);\n} catch (error) {\n  console.error('Failed to parse AI response:', aiText);\n  throw new Error('AI did not return valid JSON: ' + error.message);\n}\n\nif (!aiDecision.normalized_categories || !aiDecision.scrape_config) {\n  throw new Error('AI response missing required fields: normalized_categories or scrape_config');\n}\n\nconst normalizedData = {\n  source: detectionData.source,\n  normalized_categories: aiDecision.normalized_categories,\n  scrape_config: aiDecision.scrape_config,\n  semantic_analysis: aiDecision.semantic_analysis || {\n    grouping_method: 'semantic_clustering',\n    similarity_threshold: 0.75\n  },\n  original_categories: detectionData.categories,\n  created_at: Date.now(),\n  created_by: 'n8n-gemini-ai'\n};\n\nreturn { json: normalizedData };"
+      },
+      "id": "extract-ai-response",
+      "name": "Extract AI Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.firebase_url || 'https://firestore.googleapis.com/v1/projects/YOUR_PROJECT_ID/databases/(default)/documents'}}/normalized_categories",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "sendBodyAsJson": true,
+        "bodyParametersJson": "={\n  \"fields\": {\n    \"source_domain\": {\"stringValue\": \"{{$json.source.domain}}\"},\n    \"source_name\": {\"stringValue\": \"{{$json.source.name}}\"},\n    \"homepage_url\": {\"stringValue\": \"{{$json.source.homepage_url}}\"},\n    \"normalized_categories\": {\"stringValue\": JSON.stringify($json.normalized_categories)},\n    \"original_categories\": {\"stringValue\": JSON.stringify($json.original_categories)},\n    \"scrape_config\": {\"stringValue\": JSON.stringify($json.scrape_config)},\n    \"semantic_analysis\": {\"stringValue\": JSON.stringify($json.semantic_analysis)},\n    \"created_at\": {\"integerValue\": $json.created_at},\n    \"created_by\": {\"stringValue\": $json.created_by}\n  }\n}",
+        "options": {}
+      },
+      "id": "save-to-firebase",
+      "name": "Save Normalized to Firebase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 200],
+      "continueOnFail": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "1",
+          "name": "Google Firebase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const normalizedData = $node['Extract AI Response'].json;\nconst backendUrl = $node['Webhook Trigger'].json.backend_url || 'http://localhost:5000';\n\nconst output = {\n  backend_url: backendUrl,\n  url: normalizedData.source.homepage_url,\n  options: {\n    mode: \"auto\",\n    selectedCategories: normalizedData.scrape_config.selected_for_scraping.map(cat => ({\n      name: cat.category,\n      url: cat.url\n    })),\n    maxPages: normalizedData.scrape_config.maxPages || 2,\n    maxArticlesPerCategory: normalizedData.scrape_config.maxArticlesPerCategory || 20,\n    maxArticles: normalizedData.scrape_config.selected_for_scraping.reduce((sum, cat) => sum + (cat.maxArticles || 20), 0),\n    metadata: {\n      ai_normalized_categories: normalizedData.normalized_categories,\n      source: normalizedData.source,\n      semantic_analysis: normalizedData.semantic_analysis\n    }\n  }\n};\n\nreturn { json: output };"
+      },
+      "id": "prepare-scrape-request",
+      "name": "Prepare Scrape Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.backend_url}}/api/scrape/source",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "sendBodyAsJson": true,
+        "bodyParametersJson": "={{JSON.stringify({\n  url: $json.url,\n  options: $json.options\n})}}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "scrape-with-normalized",
+      "name": "Scrape with Normalized Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1650, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "message",
+              "value": "={{$json.message || 'Scraping completed'}}"
+            },
+            {
+              "name": "source_name",
+              "value": "={{$node['Extract AI Response'].json.source.name}}"
+            },
+            {
+              "name": "normalized_categories_count",
+              "value": "={{$node['Extract AI Response'].json.normalized_categories.length}}"
+            },
+            {
+              "name": "articles_scraped",
+              "value": "={{$json.data?.articles?.success || 0}}"
+            },
+            {
+              "name": "duplicates",
+              "value": "={{$json.data?.articles?.duplicates || 0}}"
+            },
+            {
+              "name": "failed",
+              "value": "={{$json.data?.articles?.failed || 0}}"
+            }
+          ]
+        }
+      },
+      "id": "format-final-response",
+      "name": "Format Final Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify({\n  success: true,\n  message: $json.message,\n  data: {\n    source: $json.source_name,\n    normalized_categories_count: parseInt($json.normalized_categories_count),\n    articles_scraped: parseInt($json.articles_scraped),\n    duplicates: parseInt($json.duplicates),\n    failed: parseInt($json.failed),\n    normalized_categories: $node['Extract AI Response'].json.normalized_categories,\n    scrape_results: $node['Scrape with Normalized Categories'].json\n  }\n})}}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify({\n  success: false,\n  message: 'Detection failed',\n  error: $json.error || 'Unknown error'\n})}}",
+        "options": {}
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Detect Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Categories": {
+      "main": [
+        [
+          {
+            "node": "Check Detection Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Detection Success": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI Normalize": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Response": {
+      "main": [
+        [
+          {
+            "node": "Save Normalized to Firebase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Normalized to Firebase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Scrape Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Scrape Request": {
+      "main": [
+        [
+          {
+            "node": "Scrape with Normalized Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape with Normalized Categories": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "scraper",
+    "ai",
+    "gemini",
+    "firebase"
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
