@@ -1,15 +1,12 @@
 import { Container, Typography, Box } from '@mui/material'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
-import { useTranslation } from 'next-i18next'
 
-export default function Scraper() {
-  const { t } = useTranslation('common')
-  
+export default function News() {
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
       <Container maxWidth="lg" sx={{ py: 6 }}>
         <Typography variant="h3" sx={{ fontWeight: 700 }}>
-          {t('helloPageScrapper')}
+          Hello Page News
         </Typography>
       </Container>
     </Box>

@@ -11,3 +11,9 @@ export const getFeaturedNews = (params = {}) => client.get('/news/featured', { p
 export const getLatestNews = (params = {}) => client.get('/news/latest', { params })
 
 export const getNewsStats = () => client.get('/news/stats')
+
+export const getNews = (params = {}) => client.get('/news', { params })
+
+export const getNewsById = (id) => client.get(`/news/${id}`)
+
+export const getCategories = () => client.get('/news/categories')

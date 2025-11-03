@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useRouter } from 'next/router'
 import { Container, Typography, Box, Grid, Button, Stack, Paper, Divider } from '@mui/material'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
+import { useTranslation } from 'next-i18next'
 // import StatsBar from '../src/components/home/StatsBar'
 import FeaturedArticle from '../src/components/home/FeaturedArticle'
 import ArticleCard from '../src/components/home/ArticleCard'
@@ -12,25 +13,26 @@ import EmptyState from '../src/components/home/EmptyState'
 import ErrorState from '../src/components/home/ErrorState'
 import { HomeProvider, useHomeContext } from '../src/context/HomeContext'
 
-const formatDate = (timestamp) => {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return ''
-  const now = new Date()
-  const diffMs = now - date
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  if (diffHours < 1) return 'Just now'
-  if (diffHours < 24) return `${diffHours} hours ago`
-  return date.toLocaleDateString('en-US', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  })
-}
-
 const HomePageContent = () => {
   const router = useRouter()
+  const { t } = useTranslation('common')
   const { featured, latest, sidebar, stats, loading, error, refetch } = useHomeContext()
+  
+  const formatDate = (timestamp) => {
+    if (!timestamp) return ''
+    const date = new Date(timestamp)
+    if (Number.isNaN(date.getTime())) return ''
+    const now = new Date()
+    const diffMs = now - date
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    if (diffHours < 1) return t('justNow')
+    if (diffHours < 24) return `${diffHours} ${t('hoursAgo')}`
+    return date.toLocaleDateString(router.locale === 'vi' ? 'vi-VN' : 'en-US', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
 
   const navigate = useMemo(() => ({
     to: (path) => () => router.push(path)
@@ -57,7 +59,7 @@ const HomePageContent = () => {
                 )}
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700 }}>Latest News</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{t('latestNews')}</Typography>
                     <Divider flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
                   </Box>
                   <Grid container spacing={3}>
@@ -70,7 +72,7 @@ const HomePageContent = () => {
                 </Box>
                 <Box sx={{ textAlign: 'center', mt: 6 }}>
                   <Button variant="outlined" size="large" onClick={navigate.to('/news')}>
-                    View All News →
+                    {t('viewAllNews')} →
                   </Button>
                 </Box>
               </>
@@ -78,7 +80,7 @@ const HomePageContent = () => {
           </Grid>
           <Grid item xs={12} lg={4} sx={{ display: { xs: 'none', lg: 'block' }}}>
             <Box sx={{ position: 'sticky', top: 96 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Recent</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>{t('recent')}</Typography>
               {loading ? (
                 <SidebarLoading />
               ) : (
@@ -89,22 +91,22 @@ const HomePageContent = () => {
                 </Stack>
               )}
               <Paper elevation={0} sx={{ mt: 4, p: 3, borderRadius: 3, border: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Scrape News</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{t('scrapeNews')}</Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                  Add new articles from various sources
+                  {t('addNewArticles')}
                 </Typography>
                 <Button variant="contained" size="small" fullWidth onClick={navigate.to('/scraper')}>
-                  Go to Scraper
+                  {t('goToScraper')}
                 </Button>
               </Paper>
               {stats?.categories > 0 && (
                 <Paper elevation={0} sx={{ mt: 4, p: 3, borderRadius: 3, border: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Categories</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{t('categories')}</Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                    {stats.categories} categories available
+                    {stats.categories} {t('categoriesAvailable')}
                   </Typography>
                   <Button variant="outlined" size="small" fullWidth onClick={navigate.to('/news')}>
-                    Browse by Category
+                    {t('browseByCategory')}
                   </Button>
                 </Paper>
               )}

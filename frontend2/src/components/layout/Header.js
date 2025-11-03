@@ -13,11 +13,14 @@ import {
   Container
 } from '@mui/material';
 import { useRouter } from 'next/router';
+import { useTranslation } from 'next-i18next';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
+import LanguageSwitcher from '../LanguageSwitcher';
 
 const Header = () => {
   const router = useRouter();
+  const { t } = useTranslation('common');
   const [sources, setSources] = useState([]);
   const [selectedSource, setSelectedSource] = useState('');
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
@@ -60,9 +63,9 @@ const Header = () => {
   };
 
   const navItems = [
-    { label: 'Home', path: '/' },
-    { label: 'News', path: '/news' },
-    { label: 'Scraper', path: '/scraper' }
+    { label: t('home'), path: '/' },
+    { label: t('news'), path: '/news' },
+    { label: t('scraper'), path: '/scraper' }
   ];
 
   const isActive = (path) => router.pathname === path;
@@ -119,7 +122,7 @@ const Header = () => {
             }}
             displayEmpty
           >
-            <MenuItem value="">All Sources</MenuItem>
+            <MenuItem value="">{t('allSources')}</MenuItem>
             {sources.map((source) => (
               <MenuItem key={source.id} value={source.id}>
                 {source.name}
@@ -149,6 +152,10 @@ const Header = () => {
               </Button>
             ))}
           </Stack>
+          
+          <Box sx={{ ml: 2 }}>
+            <LanguageSwitcher />
+          </Box>
         </Box>
 
         <IconButton

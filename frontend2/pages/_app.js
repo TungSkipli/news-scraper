@@ -5,6 +5,7 @@ import Head from 'next/head'
 import { createEmotionCache } from '../src/utils/createEmotionCache'
 import theme from '../src/theme'
 import Header from '../src/components/layout/Header'
+import '../styles/globals.css'
 
 const clientSideEmotionCache = createEmotionCache()
 
