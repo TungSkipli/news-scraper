@@ -5,13 +5,15 @@ const {
   scrapeAndSaveController,
   batchScrapeController,
   scrapeSourceController,
-  detectCategoriesController
+  detectCategoriesController,
+  saveArticleWithCategoryController
 } = require('../controllers/scrapeController');
 
 router.post('/save', scrapeAndSaveController);
 router.post('/batch', batchScrapeController);
 router.post('/source', scrapeSourceController);
 router.post('/detect-categories', detectCategoriesController);
+router.post('/save-with-category', saveArticleWithCategoryController);
 
 router.post('/scrape-url', scrapeUrlController);
 router.post('/scrape-and-save', scrapeAndSaveController);

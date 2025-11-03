@@ -1,0 +1,288 @@
+{
+  "name": "AI Article Classifier (Gemini)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "classify-article",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-classify",
+      "name": "Webhook - Classify Article",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 340],
+      "webhookId": "classify-article-webhook"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.backend_url || 'http://localhost:5000'}}/api/categories",
+        "authentication": "none",
+        "requestMethod": "GET",
+        "options": {}
+      },
+      "id": "load-categories",
+      "name": "1. Load Categories from File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "categories_list",
+              "name": "categories_list",
+              "value": "={{$json.data.categories}}",
+              "type": "array"
+            },
+            {
+              "id": "article",
+              "name": "article",
+              "value": "={{$('Webhook - Classify Article').item.json.article}}",
+              "type": "object"
+            },
+            {
+              "id": "backend_url",
+              "name": "backend_url",
+              "value": "={{$('Webhook - Classify Article').item.json.backend_url || 'http://localhost:5000'}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "prepare-classification",
+      "name": "2. Prepare Classification Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "modelName": "gemini-1.5-pro",
+        "options": {
+          "temperature": 0.3,
+          "maxOutputTokens": 1024
+        }
+      },
+      "id": "gemini-model",
+      "name": "Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [900, 200],
+      "credentials": {
+        "googleGeminiOAuth2Api": {
+          "id": "1",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"category_id\": {\"type\": \"string\"},\n    \"category_name\": {\"type\": \"string\"},\n    \"is_new_category\": {\"type\": \"boolean\"},\n    \"confidence\": {\"type\": \"number\"},\n    \"reasoning\": {\"type\": \"string\"},\n    \"matched_keywords\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}},\n    \"new_category_data\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"name\": {\"type\": \"string\"},\n        \"description\": {\"type\": \"string\"},\n        \"keywords\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}},\n        \"examples\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n      }\n    }\n  },\n  \"required\": [\"category_name\", \"is_new_category\", \"confidence\", \"reasoning\"]\n}"
+      },
+      "id": "output-parser",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [900, 380]
+    },
+    {
+      "parameters": {
+        "text": "=Bạn là AI Agent phân loại bài báo vào categories thông minh.\n\n## INPUT DATA\n\n### EXISTING CATEGORIES:\n{{JSON.stringify($json.categories_list, null, 2)}}\n\n### ARTICLE TO CLASSIFY:\nTitle: {{$json.article.title}}\nContent: {{$json.article.content?.substring(0, 500) || 'N/A'}}\nTags: {{JSON.stringify($json.article.tags || [])}}\nURL: {{$json.article.url}}\n\n## NHIỆM VỤ: PHÂN LOẠI BÀI BÁO\n\n### BƯỚC 1: PHÂN TÍCH BÀI BÁO\n1. Đọc title, content, tags\n2. Xác định CHỦ ĐỀ CHÍNH của bài viết\n3. Trích xuất KEYWORDS quan trọng\n\n### BƯỚC 2: SO KHỚP VỚI CATEGORIES CÓ SẴN\n\n**Cách tính Semantic Similarity:**\n- So sánh keywords của article với keywords trong từng category\n- Tính % từ khóa trùng khớp\n- Xem xét ngữ nghĩa (ví dụ: \"deep learning\" thuộc \"AI\")\n\n**Ngưỡng quyết định:**\n- Similarity >= 0.7 (70%) → MATCH, gán vào category đó\n- Similarity < 0.7 → KHÔNG MATCH, cần tạo category mới\n\n**Ví dụ so khớp:**\n```\nArticle: \"Hướng dẫn xây dựng mô hình deep learning cho nhận diện khuôn mặt\"\nKeywords: [deep learning, mô hình, nhận diện, AI, machine learning]\n\nCategory \"AI\":\n- Keywords: [AI, machine learning, deep learning, neural network, automation]\n- Match: deep learning ✓, AI ✓, machine learning ✓\n- Similarity: 3/5 = 0.6 → Nhưng \"deep learning\" là core concept của AI\n- → Semantic boost: 0.6 + 0.3 = 0.9 ✓\n- ✅ QUYẾT ĐỊNH: Gán vào category \"AI\" (confidence: 0.9)\n```\n\n### BƯỚC 3: XỬ LÝ TRƯỜNG HỢP ĐẶC BIỆT\n\n**Trường hợp 1: Bài viết có 2 chủ đề (ví dụ: IoT + AI)**\n```\nArticle: \"Ứng dụng AI trong thiết bị IoT thông minh\"\nKeywords: [AI, IoT, smart device, machine learning]\n\nPhân tích:\n- Chủ đề CHÍNH: AI (vì đây là công nghệ cốt lõi)\n- Chủ đề PHỤ: IoT (là ứng dụng của AI)\n\n✅ QUYẾT ĐỊNH: Gán vào \"AI\", KHÔNG tạo category \"IoT\"\nReasoning: \"IoT là lĩnh vực ứng dụng của AI, không phải chủ đề độc lập\"\n```\n\n**Trường hợp 2: Không match với bất kỳ category nào**\n```\nArticle: \"10 công thức làm bánh gato chocolate ngon\"\nKeywords: [làm bánh, gato, chocolate, nấu ăn]\n\nCheck existing categories: [AI, Blockchain, Web Dev, Mobile Dev]\n→ Similarity: tất cả < 0.7\n\n✅ QUYẾT ĐỊNH: Tạo category mới \"Ẩm thực\"\nNew category data:\n{\n  \"name\": \"Ẩm thực\",\n  \"description\": \"Nấu ăn, công thức món ăn, ẩm thực\",\n  \"keywords\": [\"nấu ăn\", \"món ăn\", \"công thức\", \"ẩm thực\", \"làm bánh\"],\n  \"examples\": [\"10 công thức làm bánh gato chocolate ngon\"]\n}\n```\n\n### NGUYÊN TẮC TẠO CATEGORY MỚI\n\n1. **Tên category:**\n   - Dùng tên TỔNG QUÁT, NGẮN GỌN\n   - Ví dụ: \"AI\" thay vì \"Artificial Intelligence and Machine Learning\"\n   - \"Lập trình\" thay vì \"Hướng dẫn lập trình cho người mới\"\n\n2. **Gộp chủ đề phụ vào chủ đề chính:**\n   - \"IoT + AI\" → Category: \"AI\"\n   - \"React + JavaScript\" → Category: \"Web Development\"\n   - \"iPhone + Android\" → Category: \"Mobile\"\n\n3. **Chỉ tạo mới khi:**\n   - Chủ đề HOÀN TOÀN KHÁC BIỆT với tất cả categories hiện có\n   - Không thể gán vào bất kỳ category nào (similarity < 0.7)\n\n### OUTPUT FORMAT\n\n**Nếu MATCH với category có sẵn:**\n```json\n{\n  \"category_id\": \"cat_ai_001\",\n  \"category_name\": \"AI\",\n  \"is_new_category\": false,\n  \"confidence\": 0.92,\n  \"reasoning\": \"Bài viết về deep learning thuộc lĩnh vực AI, có 92% keywords match\",\n  \"matched_keywords\": [\"deep learning\", \"neural network\", \"AI\"]\n}\n```\n\n**Nếu KHÔNG MATCH → tạo category mới:**\n```json\n{\n  \"category_id\": null,\n  \"category_name\": \"Ẩm thực\",\n  \"is_new_category\": true,\n  \"confidence\": 0.95,\n  \"reasoning\": \"Bài viết về nấu ăn, không khớp với bất kỳ category công nghệ nào. Cần tạo category mới 'Ẩm thực'\",\n  \"matched_keywords\": [],\n  \"new_category_data\": {\n    \"name\": \"Ẩm thực\",\n    \"description\": \"Nấu ăn, công thức món ăn, ẩm thực\",\n    \"keywords\": [\"nấu ăn\", \"món ăn\", \"công thức\", \"ẩm thực\", \"làm bánh\", \"gato\", \"chocolate\"],\n    \"examples\": [\"10 công thức làm bánh gato chocolate ngon\"]\n  }\n}\n```\n\n## BẮT ĐẦU PHÂN LOẠI\n\nHãy phân tích bài báo trên và đưa ra quyết định phân loại.",
+        "hasOutputParser": true
+      },
+      "id": "ai-agent-classify",
+      "name": "3. AI Agent - Classify Article",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [900, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.is_new_category}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-new-category",
+      "name": "4. Check if New Category",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 340]
+    },
+    {
+      "parameters": {
+        "url": "={{$('2. Prepare Classification Input').item.json.backend_url}}/api/categories",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"name\": $json.new_category_data.name,\n  \"description\": $json.new_category_data.description,\n  \"keywords\": $json.new_category_data.keywords,\n  \"examples\": $json.new_category_data.examples,\n  \"created_by\": \"ai-agent-gemini\"\n} }}",
+        "options": {}
+      },
+      "id": "create-new-category",
+      "name": "5. Create New Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  message: 'Article classified successfully',\n  data: {\n    article_title: $('2. Prepare Classification Input').item.json.article.title,\n    category_id: $json.data?.id || $('4. Check if New Category').item.json.category_id,\n    category_name: $('4. Check if New Category').item.json.category_name,\n    is_new_category: $('4. Check if New Category').item.json.is_new_category,\n    confidence: $('4. Check if New Category').item.json.confidence,\n    reasoning: $('4. Check if New Category').item.json.reasoning,\n    matched_keywords: $('4. Check if New Category').item.json.matched_keywords || []\n  }\n} }}",
+        "options": {}
+      },
+      "id": "respond-new-category",
+      "name": "Response - New Category Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  message: 'Article classified to existing category',\n  data: {\n    article_title: $('2. Prepare Classification Input').item.json.article.title,\n    category_id: $json.category_id,\n    category_name: $json.category_name,\n    is_new_category: false,\n    confidence: $json.confidence,\n    reasoning: $json.reasoning,\n    matched_keywords: $json.matched_keywords || []\n  }\n} }}",
+        "options": {}
+      },
+      "id": "respond-existing-category",
+      "name": "Response - Existing Category",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 440]
+    }
+  ],
+  "connections": {
+    "Webhook - Classify Article": {
+      "main": [
+        [
+          {
+            "node": "1. Load Categories from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Load Categories from File": {
+      "main": [
+        [
+          {
+            "node": "2. Prepare Classification Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Prepare Classification Input": {
+      "main": [
+        [
+          {
+            "node": "3. AI Agent - Classify Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "3. AI Agent - Classify Article",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "3. AI Agent - Classify Article",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. AI Agent - Classify Article": {
+      "main": [
+        [
+          {
+            "node": "4. Check if New Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Check if New Category": {
+      "main": [
+        [
+          {
+            "node": "5. Create New Category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response - Existing Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Create New Category": {
+      "main": [
+        [
+          {
+            "node": "Response - New Category Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "AI"
+    },
+    {
+      "id": "2",
+      "name": "Classification"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1.0"
+}

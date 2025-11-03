@@ -1,0 +1,294 @@
+{
+  "info": {
+    "name": "AI Classification - n8n Cloud Tests",
+    "description": "Test AI Classification với n8n cloud webhooks và categories thực tế từ DB",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Setup - Get Categories",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{BACKEND_URL}}/api/categories?source=file",
+          "protocol": "http",
+          "host": ["{{BACKEND_URL}}"],
+          "path": ["api", "categories"],
+          "query": [
+            {
+              "key": "source",
+              "value": "file"
+            }
+          ]
+        },
+        "description": "Load 13 categories từ file cache:\n- Lifestyle, Xã hội, Đẹp, Mẹ & Bé, Giáo dục (afamily.vn)\n- Thời sự, Thế giới, Kinh doanh, Khoa học công nghệ (vnexpress.net)\n- Tin nước Mỹ, Tin Việt Nam, Người Việt tại Mỹ, VISA Mỹ (tinnuocmy.asia)\n\n⚠️ Set BACKEND_URL environment variable (e.g., http://localhost:5000 or ngrok URL)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 1: Article về Làm đẹp → Match 'Đẹp'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"5 bí quyết chăm sóc da mùa hè cho làn da căng mịn\",\n    \"content\": \"Làn da cần được chăm sóc đặc biệt trong mùa hè. Sử dụng kem chống nắng, toner, serum và moisturizer phù hợp sẽ giúp da luôn khỏe mạnh. Skincare routine đúng cách là chìa khóa cho làn da đẹp.\",\n    \"tags\": [\"làm đẹp\", \"skincare\", \"chăm sóc da\", \"beauty\"],\n    \"url\": \"https://example.com/cham-soc-da-mua-he\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Đẹp\"\n- category_id: \"BN01hE3I3VZzIlNJ4mrQ\"\n- is_new_category: false\n- confidence: ~0.9\n- reasoning: Keywords match: làm đẹp, skincare, chăm sóc da"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 2: Article về AI → Match 'Khoa học công nghệ'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"ChatGPT và cuộc cách mạng AI trong công nghệ\",\n    \"content\": \"Trí tuệ nhân tạo (AI) đang thay đổi thế giới. ChatGPT của OpenAI là ví dụ điển hình về machine learning và deep learning. Công nghệ AI sẽ tiếp tục phát triển mạnh mẽ trong tương lai.\",\n    \"tags\": [\"AI\", \"công nghệ\", \"ChatGPT\", \"machine learning\"],\n    \"url\": \"https://example.com/chatgpt-ai-revolution\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Khoa học công nghệ\"\n- category_id: \"P8hd5lEiNI8eYroB0U3e\"\n- is_new_category: false\n- confidence: ~0.85-0.95\n- reasoning: AI, công nghệ match với Khoa học công nghệ"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 3: Article về nuôi con → Match 'Mẹ & Bé'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"10 mẹo nuôi dạy con ngoan khoa học cho ba mẹ\",\n    \"content\": \"Nuôi dạy con cần phương pháp khoa học. Parenting đúng cách giúp bé phát triển toàn diện. Chăm sóc trẻ em từ sơ sinh đến lớn cần sự kiên nhẫn và yêu thương.\",\n    \"tags\": [\"nuôi con\", \"parenting\", \"mẹ và bé\", \"chăm sóc trẻ\"],\n    \"url\": \"https://example.com/nuoi-day-con-khoa-hoc\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Mẹ & Bé\"\n- category_id: \"Wikv3OY1hHKQjTRE9gYb\"\n- is_new_category: false\n- confidence: ~0.9\n- reasoning: Keywords match: nuôi con, parenting, chăm sóc trẻ"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 4: Tin quốc tế → Match 'Thế giới'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"Tình hình chính trị quốc tế: Quan hệ Mỹ - Trung căng thẳng\",\n    \"content\": \"Tin tức thế giới hôm nay: Quan hệ giữa Mỹ và Trung Quốc tiếp tục căng thẳng. Các sự kiện quốc tế đang diễn ra phức tạp. World news cập nhật tình hình địa chính trị toàn cầu.\",\n    \"tags\": [\"thế giới\", \"quốc tế\", \"tin tức\", \"world news\"],\n    \"url\": \"https://example.com/tinh-hinh-quoc-te\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Thế giới\"\n- category_id: \"dcBhQd0Y1iby4FiJ4Qf5\"\n- is_new_category: false\n- confidence: ~0.85\n- reasoning: Tin quốc tế, thế giới match với Thế giới"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 5: Article lifestyle → Match 'Lifestyle'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"10 xu hướng thời trang mùa thu 2025 không thể bỏ qua\",\n    \"content\": \"Phong cách sống hiện đại đòi hỏi sự năng động trong thời trang. Lifestyle trends năm nay tập trung vào sự thoải mái và bền vững. Thời trang và sức khỏe là hai yếu tố quan trọng.\",\n    \"tags\": [\"lifestyle\", \"thời trang\", \"phong cách sống\", \"fashion\"],\n    \"url\": \"https://example.com/xu-huong-thoi-trang-2025\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Lifestyle\"\n- category_id: \"FxVAOBpH1oKKVmWt4TXD\"\n- is_new_category: false\n- confidence: ~0.9\n- reasoning: Lifestyle, thời trang match với Lifestyle"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 6: Kinh doanh startup → Match 'Kinh doanh'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"5 bí quyết khởi nghiệp thành công cho doanh nhân trẻ\",\n    \"content\": \"Kinh doanh và khởi nghiệp cần có chiến lược rõ ràng. Startup thành công đòi hỏi sự kiên trì và đổi mới. Doanh nghiệp cần am hiểu thị trường và khách hàng.\",\n    \"tags\": [\"kinh doanh\", \"startup\", \"khởi nghiệp\", \"business\"],\n    \"url\": \"https://example.com/khoi-nghiep-thanh-cong\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Kinh doanh\"\n- category_id: \"8LNJOWiGHkXNwgVIMPer\"\n- is_new_category: false\n- confidence: ~0.9\n- reasoning: Kinh doanh, startup match với Kinh doanh"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 7: Du học Mỹ → Match 'VISA Mỹ'",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"Hướng dẫn xin VISA du học Mỹ F1 chi tiết\",\n    \"content\": \"Du học Mỹ cần chuẩn bị VISA F1. Thủ tục xin visa du học đòi hỏi nhiều giấy tờ. Immigration process cần được thực hiện cẩn thận. USA visa application cho sinh viên quốc tế.\",\n    \"tags\": [\"VISA\", \"du học\", \"USA\", \"immigration\"],\n    \"url\": \"https://example.com/xin-visa-du-hoc-my\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"VISA Mỹ\"\n- category_id: \"rgoux5hitMyswv87hqSl\"\n- is_new_category: false\n- confidence: ~0.85\n- reasoning: VISA, du học, immigration match với VISA Mỹ"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 8: Ẩm thực → CREATE NEW CATEGORY",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"10 công thức nấu món Việt ngon cho bữa cơm gia đình\",\n    \"content\": \"Nấu ăn là nghệ thuật. Các món ăn Việt Nam truyền thống rất phong phú. Công thức nấu món ngon đơn giản cho người bận rộn. Ẩm thực Việt được yêu thích trên thế giới.\",\n    \"tags\": [\"nấu ăn\", \"món ăn\", \"ẩm thực\", \"cooking\"],\n    \"url\": \"https://example.com/cong-thuc-nau-mon-viet\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Ẩm thực\" (hoặc \"Nấu ăn\")\n- is_new_category: true ⭐\n- confidence: ~0.9\n- reasoning: \"Chủ đề nấu ăn không match với bất kỳ category nào, tạo category mới\"\n- new_category_data: {\n    name: \"Ẩm thực\",\n    keywords: [\"nấu ăn\", \"món ăn\", \"ẩm thực\", \"cooking\"],\n    description: \"Nấu ăn, công thức món ăn, ẩm thực Việt\"\n  }"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 9: Du lịch → CREATE NEW CATEGORY",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"Review 10 địa điểm du lịch hot nhất Việt Nam 2025\",\n    \"content\": \"Du lịch Việt Nam có nhiều điểm đến hấp dẫn. Travel tips giúp bạn có chuyến đi trọn vẹn. Các địa điểm check-in đẹp cho phượt thủ. Tourism ở Việt Nam đang phát triển mạnh.\",\n    \"tags\": [\"du lịch\", \"travel\", \"điểm đến\", \"tourism\"],\n    \"url\": \"https://example.com/dia-diem-du-lich-viet-nam\"\n  },\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/classify-article",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "classify-article"]
+        },
+        "description": "**Expected:**\n- category_name: \"Du lịch\" (hoặc \"Travel\")\n- is_new_category: true ⭐\n- confidence: ~0.9\n- reasoning: \"Chủ đề du lịch không match category nào, tạo mới\"\n- new_category_data: {\n    name: \"Du lịch\",\n    keywords: [\"du lịch\", \"travel\", \"tourism\"],\n    description: \"Du lịch, địa điểm du lịch, travel tips\"\n  }"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 10: Save Article với Category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"article\": {\n    \"title\": \"5 bí quyết chăm sóc da mùa hè cho làn da căng mịn\",\n    \"summary\": \"Làn da cần được chăm sóc đặc biệt trong mùa hè với skincare routine đúng cách.\",\n    \"content\": \"Làn da cần được chăm sóc đặc biệt trong mùa hè. Sử dụng kem chống nắng, toner, serum và moisturizer phù hợp sẽ giúp da luôn khỏe mạnh. Skincare routine đúng cách là chìa khóa cho làn da đẹp.\",\n    \"url\": \"https://example.com/cham-soc-da-mua-he\",\n    \"external_source\": \"https://example.com/cham-soc-da-mua-he\",\n    \"image\": {\n      \"url\": \"https://example.com/skincare.jpg\",\n      \"alt\": \"Chăm sóc da\"\n    },\n    \"author\": \"Beauty Expert\",\n    \"published_at\": \"2025-01-03T00:00:00.000Z\",\n    \"tags\": [\"làm đẹp\", \"skincare\", \"chăm sóc da\"]\n  },\n  \"category_id\": \"BN01hE3I3VZzIlNJ4mrQ\",\n  \"category_name\": \"Đẹp\",\n  \"classification\": {\n    \"confidence\": 0.92,\n    \"reasoning\": \"Bài viết về skincare và làm đẹp, match 92% keywords với category Đẹp\",\n    \"is_new_category\": false,\n    \"matched_keywords\": [\"làm đẹp\", \"skincare\", \"chăm sóc da\", \"beauty\"]\n  }\n}"
+        },
+        "url": {
+          "raw": "{{BACKEND_URL}}/api/scrape/save-with-category",
+          "protocol": "http",
+          "host": ["{{BACKEND_URL}}"],
+          "path": ["api", "scrape", "save-with-category"]
+        },
+        "description": "**Test lưu article với category đã được AI classify**\n\nExpected:\n- Lưu vào Firestore: news/articles/Đẹp/{doc_id}\n- Sync lên Algolia với category_id\n- Response: {success: true, path: \"news/articles/Đẹp/...\"}\n\n⚠️ Set BACKEND_URL environment variable"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 11: Smart Scraper - Full Flow (n8n Cloud)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://vnexpress.net\",\n  \"backend_url\": \"{{BACKEND_URL}}\"\n}"
+        },
+        "url": {
+          "raw": "https://tung123.app.n8n.cloud/webhook-test/smart-scraper",
+          "protocol": "https",
+          "host": ["tung123", "app", "n8n", "cloud"],
+          "path": ["webhook-test", "smart-scraper"]
+        },
+        "description": "**Full automation flow:**\n1. Load categories from backend\n2. Scrape homepage articles\n3. Classify each article with AI\n4. Auto-create new categories if needed\n5. Save articles to Firestore with category_id\n\n⚠️ Requirements:\n- Backend running (local or ngrok)\n- Set BACKEND_URL environment variable\n- n8n workflow deployed on cloud\n\n**Expected:**\n- Scrapes 5-10 articles\n- Each article classified and saved\n- Response: Array of saved articles with categories"
+      },
+      "response": []
+    }
+  ]
+}

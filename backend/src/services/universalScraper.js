@@ -383,8 +383,83 @@ const scrapeAndSave = async (url) => {
   }
 };
 
+const saveArticleWithCategory = async (articleData, categoryId, categoryName, classification = {}) => {
+  try {
+    console.log(`[saveArticleWithCategory] 💾 Saving article: ${articleData.title}`);
+    console.log(`[saveArticleWithCategory] 📁 Category: ${categoryName} (${categoryId})`);
+
+    const categoryRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(categoryName);
+    
+    const existingArticle = await categoryRef
+      .where('external_source', '==', articleData.external_source || articleData.url)
+      .limit(1)
+      .get();
+    
+    if (!existingArticle.empty) {
+      const existingDoc = existingArticle.docs[0];
+      console.log(`[saveArticleWithCategory] ⚠️  DUPLICATE DETECTED - Article already exists`);
+      console.log(`[saveArticleWithCategory] Path: news/articles/${categoryName}/${existingDoc.id}`);
+      
+      return {
+        success: true,
+        article: existingDoc.data(),
+        firebaseId: existingDoc.id,
+        path: `news/articles/${categoryName}/${existingDoc.id}`,
+        isDuplicate: true
+      };
+    }
+
+    const articleToSave = {
+      ...articleData,
+      category: categoryName,
+      category_id: categoryId,
+      classification: {
+        confidence: classification.confidence || 0,
+        reasoning: classification.reasoning || '',
+        is_new_category: classification.is_new_category || false,
+        matched_keywords: classification.matched_keywords || [],
+        classified_at: new Date().toISOString(),
+        classified_by: 'ai-gemini-agent'
+      }
+    };
+
+    const docRef = await categoryRef.add(articleToSave);
+
+    await algoliaClient.saveObject({
+      indexName: algoliaIndexName,
+      body: {
+        objectID: docRef.id,
+        title: articleToSave.title,
+        summary: articleToSave.summary,
+        category: categoryName,
+        category_id: categoryId,
+        image: articleToSave.image?.url || '',
+        published_at: articleToSave.published_at,
+        classification_confidence: classification.confidence || 0
+      }
+    });
+
+    console.log(`[saveArticleWithCategory] ✅ Article saved and synced to Algolia`);
+
+    return {
+      success: true,
+      article: articleToSave,
+      firebaseId: docRef.id,
+      path: `news/articles/${categoryName}/${docRef.id}`,
+      isDuplicate: false
+    };
+  } catch (error) {
+    console.error('[saveArticleWithCategory] Error:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   scrapeUrl,
   scrapeAndSave,
+  saveArticleWithCategory,
   createSlug
 };

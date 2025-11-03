@@ -1,0 +1,341 @@
+{
+  "info": {
+    "name": "AI Classification APIs",
+    "description": "Test APIs for AI Article Classification System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "1. Get All Categories (from file cache)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/categories?source=file",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "categories"],
+              "query": [
+                {
+                  "key": "source",
+                  "value": "file",
+                  "description": "Load from file cache"
+                }
+              ]
+            },
+            "description": "Load categories từ file cache (nhanh, không query DB)"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Get All Categories (force refresh from Firestore)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/categories?force_refresh=true",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "categories"],
+              "query": [
+                {
+                  "key": "force_refresh",
+                  "value": "true",
+                  "description": "Force load from Firestore and update cache"
+                }
+              ]
+            },
+            "description": "Force load từ Firestore và update file cache"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Create New Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cloud Computing\",\n  \"description\": \"Cloud services, AWS, Azure, GCP, serverless\",\n  \"keywords\": [\"cloud\", \"AWS\", \"Azure\", \"GCP\", \"serverless\", \"lambda\", \"kubernetes\"],\n  \"examples\": [\"Hướng dẫn deploy lên AWS\", \"Kubernetes cho người mới\"],\n  \"created_by\": \"manual-test\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/categories",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "categories"]
+            },
+            "description": "Tạo category mới (manual hoặc từ AI)"
+          },
+          "response": []
+        },
+        {
+          "name": "4. Sync Categories from Firestore",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/categories/sync",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "categories", "sync"]
+            },
+            "description": "Sync tất cả categories từ Firestore về file cache"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Scraping",
+      "item": [
+        {
+          "name": "1. Detect Categories from Homepage",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://vnexpress.net\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/scrape/detect-categories",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "scrape", "detect-categories"]
+            },
+            "description": "Detect categories từ homepage (không scrape articles)"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Scrape Single URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://vnexpress.net/chat-gpt-la-gi-4564825.html\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/scrape/scrape-url",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "scrape", "scrape-url"]
+            },
+            "description": "Scrape 1 article (không lưu DB)"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Save Article with Category (AI classified)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"article\": {\n    \"title\": \"Hướng dẫn xây dựng mô hình Deep Learning với TensorFlow\",\n    \"summary\": \"Deep learning là một nhánh của machine learning sử dụng neural networks...\",\n    \"content\": \"Deep learning đã trở thành công nghệ then chốt trong AI. TensorFlow là framework phổ biến...\",\n    \"url\": \"https://example.com/deep-learning-tensorflow\",\n    \"external_source\": \"https://example.com/deep-learning-tensorflow\",\n    \"image\": {\n      \"url\": \"https://example.com/image.jpg\",\n      \"alt\": \"Deep Learning\"\n    },\n    \"author\": \"John Doe\",\n    \"published_at\": \"2025-01-01T00:00:00.000Z\",\n    \"tags\": [\"AI\", \"Deep Learning\", \"TensorFlow\"]\n  },\n  \"category_id\": \"cat_ai_001\",\n  \"category_name\": \"AI\",\n  \"classification\": {\n    \"confidence\": 0.95,\n    \"reasoning\": \"Bài viết về deep learning thuộc lĩnh vực AI, có 95% keywords match với category AI\",\n    \"is_new_category\": false,\n    \"matched_keywords\": [\"deep learning\", \"AI\", \"machine learning\", \"neural network\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/scrape/save-with-category",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "scrape", "save-with-category"]
+            },
+            "description": "Lưu article với category đã được AI classify"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "n8n Workflows",
+      "item": [
+        {
+          "name": "1. AI Classify Article (n8n)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"article\": {\n    \"title\": \"Ứng dụng AI trong thiết bị IoT thông minh\",\n    \"content\": \"Trí tuệ nhân tạo đang cách mạng hóa Internet of Things. Các thiết bị IoT giờ đây có thể học hỏi và tự động hóa...\",\n    \"tags\": [\"AI\", \"IoT\", \"Smart Home\", \"Automation\"],\n    \"url\": \"https://example.com/ai-iot\"\n  },\n  \"backend_url\": \"http://localhost:5000\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5678/webhook/classify-article",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5678",
+              "path": ["webhook", "classify-article"]
+            },
+            "description": "Gọi n8n workflow để AI classify 1 article"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Smart Scraper with AI Classification (n8n)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"homepage_url\": \"https://vnexpress.net\",\n  \"maxCategories\": 2,\n  \"maxPages\": 1,\n  \"maxArticlesPerCategory\": 5,\n  \"backend_url\": \"http://localhost:5000\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5678/webhook/smart-scraper",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5678",
+              "path": ["webhook", "smart-scraper"]
+            },
+            "description": "Scrape homepage → AI classify từng article → Save"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Test Scenarios",
+      "item": [
+        {
+          "name": "Scenario 1: Article về AI (match existing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"article\": {\n    \"title\": \"ChatGPT và cuộc cách mạng AI trong giáo dục\",\n    \"content\": \"ChatGPT của OpenAI đang thay đổi cách học tập. Với khả năng xử lý ngôn ngữ tự nhiên...\",\n    \"tags\": [\"ChatGPT\", \"AI\", \"OpenAI\", \"Education\"],\n    \"url\": \"https://example.com/chatgpt-education\"\n  },\n  \"backend_url\": \"http://localhost:5000\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5678/webhook/classify-article",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5678",
+              "path": ["webhook", "classify-article"]
+            },
+            "description": "Expected: Match với category 'AI' (confidence ~0.9)"
+          },
+          "response": []
+        },
+        {
+          "name": "Scenario 2: IoT + AI (gộp vào AI)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"article\": {\n    \"title\": \"Smart Home với AI và IoT\",\n    \"content\": \"Nhà thông minh sử dụng AI để điều khiển các thiết bị IoT. Machine learning giúp dự đoán thói quen...\",\n    \"tags\": [\"Smart Home\", \"AI\", \"IoT\", \"Automation\"],\n    \"url\": \"https://example.com/smart-home-ai-iot\"\n  },\n  \"backend_url\": \"http://localhost:5000\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5678/webhook/classify-article",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5678",
+              "path": ["webhook", "classify-article"]
+            },
+            "description": "Expected: Match với 'AI', không tạo category IoT riêng"
+          },
+          "response": []
+        },
+        {
+          "name": "Scenario 3: Article về nấu ăn (tạo category mới)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"article\": {\n    \"title\": \"10 công thức làm bánh gato chocolate ngon\",\n    \"content\": \"Bánh gato chocolate là món tráng miệng được yêu thích. Cách làm bánh gato đơn giản...\",\n    \"tags\": [\"Nấu ăn\", \"Bánh\", \"Chocolate\", \"Ẩm thực\"],\n    \"url\": \"https://example.com/banh-gato-chocolate\"\n  },\n  \"backend_url\": \"http://localhost:5000\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5678/webhook/classify-article",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5678",
+              "path": ["webhook", "classify-article"]
+            },
+            "description": "Expected: Tạo category mới 'Ẩm thực' (is_new_category: true)"
+          },
+          "response": []
+        },
+        {
+          "name": "Scenario 4: React + JavaScript (gộp Web Dev)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"article\": {\n    \"title\": \"Hướng dẫn React Hooks và State Management\",\n    \"content\": \"React hooks đã thay đổi cách viết React components. useState, useEffect là những hooks cơ bản...\",\n    \"tags\": [\"React\", \"JavaScript\", \"Frontend\", \"Web Development\"],\n    \"url\": \"https://example.com/react-hooks\"\n  },\n  \"backend_url\": \"http://localhost:5000\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5678/webhook/classify-article",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5678",
+              "path": ["webhook", "classify-article"]
+            },
+            "description": "Expected: Match với 'Web Development'"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

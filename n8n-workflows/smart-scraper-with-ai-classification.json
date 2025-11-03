@@ -1,0 +1,307 @@
+{
+  "name": "Smart Scraper with AI Classification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smart-scraper",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-start",
+      "name": "Webhook - Start Scraper",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 340],
+      "webhookId": "smart-scraper-webhook"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.backend_url || 'http://localhost:5000'}}/api/categories",
+        "authentication": "none",
+        "requestMethod": "GET",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "source",
+              "value": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "load-categories",
+      "name": "1. Load Categories (from file cache)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "url": "={{$('Webhook - Start Scraper').item.json.backend_url || 'http://localhost:5000'}}/api/scrape/source",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"url\": $('Webhook - Start Scraper').item.json.homepage_url,\n  \"options\": {\n    \"maxCategories\": $('Webhook - Start Scraper').item.json.maxCategories || 3,\n    \"maxPages\": $('Webhook - Start Scraper').item.json.maxPages || 2,\n    \"maxArticlesPerCategory\": $('Webhook - Start Scraper').item.json.maxArticlesPerCategory || 20,\n    \"skipSave\": true\n  }\n} }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "scrape-articles",
+      "name": "2. Scrape Articles (without saving)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 340],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "categories_cache",
+              "name": "categories_cache",
+              "value": "={{$('1. Load Categories (from file cache)').item.json.data.categories}}",
+              "type": "array"
+            },
+            {
+              "id": "scraped_articles",
+              "name": "scraped_articles",
+              "value": "={{$json.data.categories.flatMap(cat => cat.articles || [])}}",
+              "type": "array"
+            },
+            {
+              "id": "backend_url",
+              "name": "backend_url",
+              "value": "={{$('Webhook - Start Scraper').item.json.backend_url || 'http://localhost:5000'}}",
+              "type": "string"
+            },
+            {
+              "id": "total_articles",
+              "name": "total_articles",
+              "value": "={{$json.data.categories.flatMap(cat => cat.articles || []).length}}",
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "id": "prepare-loop",
+      "name": "3. Prepare Articles Loop",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 340]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-articles",
+      "name": "4. Split into Batches (1 article at a time)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1120, 340]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "current_article",
+              "name": "current_article",
+              "value": "={{$json.scraped_articles[$('4. Split into Batches (1 article at a time)').item.json.currentItem]}}",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "get-current-article",
+      "name": "5. Get Current Article",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1340, 340]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/classify-article",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"article\": $json.current_article,\n  \"backend_url\": $('3. Prepare Articles Loop').item.json.backend_url\n} }}",
+        "options": {}
+      },
+      "id": "classify-article",
+      "name": "6. AI Classify Article",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 340],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "={{$('3. Prepare Articles Loop').item.json.backend_url}}/api/scrape/save-with-category",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"article\": $('5. Get Current Article').item.json.current_article,\n  \"category_id\": $json.data.category_id,\n  \"category_name\": $json.data.category_name,\n  \"classification\": {\n    \"confidence\": $json.data.confidence,\n    \"reasoning\": $json.data.reasoning,\n    \"is_new_category\": $json.data.is_new_category,\n    \"matched_keywords\": $json.data.matched_keywords\n  }\n} }}",
+        "options": {}
+      },
+      "id": "save-article",
+      "name": "7. Save Article with Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 340],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  message: 'Smart scraping with AI classification completed',\n  data: {\n    total_articles: $('3. Prepare Articles Loop').item.json.total_articles,\n    processed: $('4. Split into Batches (1 article at a time)').item.json.totalItems,\n    summary: 'All articles scraped, classified by AI, and saved with categories'\n  }\n} }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2220, 340]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: false,\n  message: 'Failed to scrape articles',\n  error: $json.error || 'Unknown error'\n} }}",
+        "options": {}
+      },
+      "id": "respond-error",
+      "name": "Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 540]
+    }
+  ],
+  "connections": {
+    "Webhook - Start Scraper": {
+      "main": [
+        [
+          {
+            "node": "1. Load Categories (from file cache)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Load Categories (from file cache)": {
+      "main": [
+        [
+          {
+            "node": "2. Scrape Articles (without saving)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Scrape Articles (without saving)": {
+      "main": [
+        [
+          {
+            "node": "3. Prepare Articles Loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Prepare Articles Loop": {
+      "main": [
+        [
+          {
+            "node": "4. Split into Batches (1 article at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Split into Batches (1 article at a time)": {
+      "main": [
+        [
+          {
+            "node": "5. Get Current Article",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Get Current Article": {
+      "main": [
+        [
+          {
+            "node": "6. AI Classify Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. AI Classify Article": {
+      "main": [
+        [
+          {
+            "node": "7. Save Article with Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Save Article with Category": {
+      "main": [
+        [
+          {
+            "node": "4. Split into Batches (1 article at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "AI"
+    },
+    {
+      "id": "2",
+      "name": "Smart Scraper"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1.0"
+}

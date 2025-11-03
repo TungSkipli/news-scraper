@@ -1,4 +1,4 @@
-const { scrapeUrl, scrapeAndSave } = require('../services/universalScraper');
+const { scrapeUrl, scrapeAndSave, saveArticleWithCategory } = require('../services/universalScraper');
 const { scrapeEntireSource, scrapeSingleCategory } = require('../services/sourceOrchestrator');
 const { detectCategories } = require('../services/homepageDetector');
 const { validateUrl, validateUrlArray } = require('../utils/validators');
@@ -324,10 +324,48 @@ const detectCategoriesController = async (req, res, next) => {
   }
 };
 
+const saveArticleWithCategoryController = async (req, res, next) => {
+  try {
+    const { article, category_id, category_name, classification } = req.body;
+
+    if (!article || !category_name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Article and category_name are required'
+      });
+    }
+
+    const result = await saveArticleWithCategory(article, category_id, category_name, classification);
+
+    res.json({
+      success: true,
+      message: result.isDuplicate 
+        ? `⚠️ Duplicate detected - Article already exists at ${result.path}`
+        : `✅ Article saved to ${result.path}`,
+      data: {
+        article: result.article,
+        firebaseId: result.firebaseId,
+        path: result.path,
+        isDuplicate: result.isDuplicate || false,
+        category: category_name,
+        category_id: category_id
+      }
+    });
+  } catch (error) {
+    console.error('[saveArticleWithCategoryController] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to save article with category',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
 module.exports = {
   scrapeUrlController,
   scrapeAndSaveController,
   batchScrapeController,
   scrapeSourceController,
-  detectCategoriesController
+  detectCategoriesController,
+  saveArticleWithCategoryController
 };
