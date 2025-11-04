@@ -243,17 +243,6 @@
       "main": [
         [
           {
-            "node": "Save Article to Firebase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Article to Firebase": {
-      "main": [
-        [
-          {
             "node": "Respond to Webhook",
             "type": "main",
             "index": 0

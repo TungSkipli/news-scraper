@@ -47,12 +47,35 @@ const triggerN8nWorkflow = async (articleData) => {
     console.log('[N8N] ✅ Workflow completed successfully');
     console.log('[N8N] 📥 Response:', JSON.stringify(response.data, null, 2));
     
+    const n8nData = Array.isArray(response.data) ? response.data[0] : response.data;
+    console.log('[N8N] 🔍 Extracted n8nData keys:', Object.keys(n8nData));
+    console.log('[N8N] 🔍 Full n8nData:', n8nData);
+    
+    if (n8nData.message) {
+      console.log('[N8N] ⚠️ N8N returned message:', n8nData.message);
+      try {
+        const parsedMessage = JSON.parse(n8nData.message);
+        console.log('[N8N] 🔍 Parsed message:', parsedMessage);
+        Object.assign(n8nData, parsedMessage);
+      } catch (e) {
+        console.log('[N8N] ⚠️ Message is not JSON');
+      }
+    }
+    
+    console.log('[N8N] 🔍 category_id:', n8nData.category_id);
+    console.log('[N8N] 🔍 category_name:', n8nData.category_name);
+    console.log('[N8N] 🔍 category_slug:', n8nData.category_slug);
+    
     return { 
       success: true, 
       data: {
-        article: response.data.article || articleData,
-        category: response.data.category || null,
-        ai_result: response.data.ai_result || null
+        article: n8nData.article || articleData,
+        category: {
+          id: n8nData.category_id,
+          name: n8nData.category_name,
+          slug: n8nData.category_slug
+        },
+        ai_result: n8nData.ai_result || null
       }
     };
   } catch (error) {
@@ -85,10 +108,84 @@ const scrapeUrlController = async (req, res, next) => {
       });
     }
 
+    const { db, algoliaClient, algoliaIndexName, FieldValue } = require('../config/firebase');
+    const { FIREBASE_COLLECTIONS } = require('../utils/constants');
+    const enrichedData = n8nResult.data;
+    
+    console.log('[scrapeUrlController] 📊 N8N returned category:', JSON.stringify(enrichedData.category, null, 2));
+    
+    const categorySlug = enrichedData.category?.slug || 'uncategorized';
+    const categoryRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(categorySlug);
+
+    const existingArticle = await categoryRef
+      .where('external_source', '==', article.external_source)
+      .limit(1)
+      .get();
+
+    if (!existingArticle.empty) {
+      const existingDoc = existingArticle.docs[0];
+      console.log(`[scrapeUrlController] ⚠️  Article already exists in Firebase`);
+      return res.json({
+        success: true,
+        message: 'Article already exists',
+        data: {
+          id: existingDoc.id,
+          article: existingDoc.data(),
+          isDuplicate: true
+        }
+      });
+    }
+
+    const finalArticle = {
+      ...enrichedData.article,
+      created_at: Date.now(),
+      scraped_at: Date.now()
+    };
+
+    if (enrichedData.category?.id) {
+      finalArticle.category_id = enrichedData.category.id;
+    }
+    if (enrichedData.category?.name) {
+      finalArticle.category_name = enrichedData.category.name;
+    }
+    if (enrichedData.category?.slug) {
+      finalArticle.category_slug = enrichedData.category.slug;
+    }
+
+    const docRef = await categoryRef.add(finalArticle);
+    console.log(`[scrapeUrlController] ✅ Saved to Firebase: news/articles/${categorySlug}/${docRef.id}`);
+
+    await algoliaClient.saveObject({
+      indexName: algoliaIndexName,
+      body: {
+        objectID: docRef.id,
+        title: finalArticle.title,
+        summary: finalArticle.summary || '',
+        category: categorySlug,
+        image: finalArticle.image?.url || '',
+        published_at: finalArticle.published_at
+      }
+    }).catch(err => console.warn('[scrapeUrlController] Algolia sync failed:', err.message));
+
+    if (enrichedData.category?.id) {
+      await db.collection('categories').doc(enrichedData.category.id).update({
+        total_articles: FieldValue.increment(1),
+        last_scraped_at: Date.now()
+      }).catch(err => console.warn('[scrapeUrlController] Category update failed:', err.message));
+    }
+
     res.json({
       success: true,
-      message: 'Article processed and classified by AI successfully',
-      data: n8nResult.data || { article }
+      message: 'Article processed and saved successfully',
+      data: {
+        id: docRef.id,
+        article: finalArticle,
+        path: `news/articles/${categorySlug}/${docRef.id}`,
+        ai_result: enrichedData.ai_result
+      }
     });
   } catch (error) {
     console.error('[scrapeUrlController] Error:', error);
