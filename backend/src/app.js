@@ -3,6 +3,8 @@ const cors = require("cors");
 const scrapeRoutes = require('./routes/scrapeRoutes');
 const newsRoutes = require('./routes/newsRoutes');
 const sourceRoutes = require('./routes/sourceRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const workflowRoutes = require('./routes/workflowRoutes');
 const { logError } = require('./utils/errorHandler');
 
 const app = express();
@@ -29,6 +31,8 @@ app.get('/', (req, res) => {
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api', newsRoutes);
 app.use('/api', sourceRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/workflow', workflowRoutes);
 
 app.get('/api/test-db', async (req, res) => {
     try {

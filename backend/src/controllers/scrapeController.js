@@ -2,6 +2,64 @@ const { scrapeUrl, scrapeAndSave } = require('../services/universalScraper');
 const { scrapeEntireSource, scrapeSingleCategory } = require('../services/sourceOrchestrator');
 const { detectCategories } = require('../services/homepageDetector');
 const { validateUrl, validateUrlArray } = require('../utils/validators');
+const axios = require('axios');
+
+const triggerN8nWorkflow = async (articleData) => {
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'https://vnuphammanhtu.app.n8n.cloud/webhook/afamily-scraper';
+  
+  try {
+    console.log('[N8N] Triggering workflow with article:', articleData.title);
+    
+    const { db } = require('../config/firebase');
+    const categoriesSnapshot = await db.collection('categories').get();
+    const categories = categoriesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      name: doc.data().name,
+      slug: doc.data().slug,
+      url: doc.data().url,
+      source_domain: doc.data().source_domain,
+      source_id: doc.data().source_id,
+      total_articles: doc.data().total_articles || 0
+    }));
+    
+    console.log(`[N8N] 📊 Loaded ${categories.length} categories from Firebase`);
+    if (categories.length === 0) {
+      console.warn('[N8N] ⚠️ WARNING: No categories found in Firebase!');
+    }
+    
+    const payload = {
+      article: articleData,
+      categories: categories,
+      categories_count: categories.length
+    };
+    
+    console.log('[N8N] 📤 Sending payload:', JSON.stringify({ 
+      article_title: articleData.title, 
+      categories_count: categories.length,
+      category_names: categories.map(c => c.name) 
+    }));
+    
+    const response = await axios.post(n8nWebhookUrl, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 60000
+    });
+    
+    console.log('[N8N] ✅ Workflow completed successfully');
+    console.log('[N8N] 📥 Response:', JSON.stringify(response.data, null, 2));
+    
+    return { 
+      success: true, 
+      data: {
+        article: response.data.article || articleData,
+        category: response.data.category || null,
+        ai_result: response.data.ai_result || null
+      }
+    };
+  } catch (error) {
+    console.error('[N8N] ❌ Failed to trigger workflow:', error.message);
+    return { success: false, error: error.message };
+  }
+};
 
 const scrapeUrlController = async (req, res, next) => {
   try {
@@ -17,10 +75,20 @@ const scrapeUrlController = async (req, res, next) => {
 
     const article = await scrapeUrl(url);
 
+    const n8nResult = await triggerN8nWorkflow(article);
+    
+    if (!n8nResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'N8N workflow failed: ' + n8nResult.error,
+        data: { article }
+      });
+    }
+
     res.json({
       success: true,
-      message: 'Article scraped successfully',
-      data: article
+      message: 'Article processed and classified by AI successfully',
+      data: n8nResult.data || { article }
     });
   } catch (error) {
     console.error('[scrapeUrlController] Error:', error);

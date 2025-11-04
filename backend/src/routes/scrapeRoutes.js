@@ -8,6 +8,7 @@ const {
   detectCategoriesController
 } = require('../controllers/scrapeController');
 
+router.post('/url', scrapeUrlController);
 router.post('/save', scrapeAndSaveController);
 router.post('/batch', batchScrapeController);
 router.post('/source', scrapeSourceController);

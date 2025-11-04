@@ -216,42 +216,7 @@ const parseDate = (dateString) => {
   return Date.now();
 };
 
-const extractCategoryFromUrl = (url, articleData = null) => {
-  try {
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
-    
-    console.log(`[extractCategoryFromUrl] Analyzing URL: ${url}`);
-    console.log(`[extractCategoryFromUrl] Path parts: ${pathParts.join(', ')}`);
-    
-    for (const part of pathParts) {
-      const normalized = normalizeCategory(part);
-      
-      if (normalized !== 'uncategorized') {
-        console.log(`[extractCategoryFromUrl] ✅ Found category: "${part}" -> "${normalized}"`);
-        return normalized;
-      }
-    }
 
-    if (articleData && articleData.tags && articleData.tags.length > 0) {
-      console.log(`[extractCategoryFromUrl] Trying tags: ${articleData.tags.join(', ')}`);
-      for (const tag of articleData.tags) {
-        const normalized = normalizeCategory(tag);
-        if (normalized !== 'uncategorized') {
-          console.log(`[extractCategoryFromUrl] ✅ Found category from tag: "${tag}" -> "${normalized}"`);
-          return normalized;
-        }
-      }
-    }
-    
-    console.warn(`[extractCategoryFromUrl] ⚠️  Could not detect category from URL or tags`);
-    return 'uncategorized';
-    
-  } catch (e) {
-    console.error('[extractCategoryFromUrl] Error:', e);
-    return 'uncategorized';
-  }
-};
 
 const scrapeUrl = async (url, retryCount = 0) => {
   let browser;
@@ -285,7 +250,10 @@ const scrapeUrl = async (url, retryCount = 0) => {
       throw new Error('Could not extract title from the page');
     }
 
-    const category = extractCategoryFromUrl(url, rawData);
+    const urlObj = new URL(url);
+    const sourceDomain = urlObj.hostname;
+    const sourceIdParts = sourceDomain.replace('www.', '').split('.');
+    const sourceId = sourceIdParts.length >= 2 ? sourceIdParts[sourceIdParts.length - 2] : sourceDomain;
 
     const article = {
       title: rawData.title,
@@ -299,13 +267,13 @@ const scrapeUrl = async (url, retryCount = 0) => {
       tags: Array.isArray(rawData.tags) && rawData.tags.length > 0 
         ? rawData.tags 
         : DEFAULT_VALUES.TAGS,
-      category: category,
       external_source: url,
+      source_domain: sourceDomain,
+      source_id: sourceId,
       published_at: parseDate(rawData.publishedDate),
       slug: createSlug(rawData.title),
       likes: DEFAULT_VALUES.LIKES
     };
-
 
     return article;
 
@@ -324,7 +292,7 @@ const scrapeUrl = async (url, retryCount = 0) => {
   }
 };
 
-const scrapeAndSave = async (url) => {
+const scrapeAndSave = async (url, categorySlug = 'uncategorized') => {
   try {
     console.log(`[scrapeAndSave] 🔍 Scraping URL: ${url}`);
     const article = await scrapeUrl(url);
@@ -332,7 +300,7 @@ const scrapeAndSave = async (url) => {
     const categoryRef = db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(article.category);
+      .collection(categorySlug);
     
     const existingArticle = await categoryRef
       .where('external_source', '==', url)
@@ -342,14 +310,14 @@ const scrapeAndSave = async (url) => {
     if (!existingArticle.empty) {
       const existingDoc = existingArticle.docs[0];
       console.log(`[scrapeAndSave] ⚠️  DUPLICATE DETECTED - Article already exists`);
-      console.log(`[scrapeAndSave] Path: news/articles/${article.category}/${existingDoc.id}`);
+      console.log(`[scrapeAndSave] Path: news/articles/${categorySlug}/${existingDoc.id}`);
       console.log(`[scrapeAndSave] URL: ${url}`);
       
       return {
         success: true,
         article: existingDoc.data(),
         firebaseId: existingDoc.id,
-        path: `news/articles/${article.category}/${existingDoc.id}`,
+        path: `news/articles/${categorySlug}/${existingDoc.id}`,
         isDuplicate: true
       };
     }
@@ -362,7 +330,7 @@ const scrapeAndSave = async (url) => {
         objectID: docRef.id,
         title: article.title,
         summary: article.summary,
-        category: article.category,
+        category: categorySlug,
         image: article.image.url,
         published_at: article.published_at
       }
@@ -374,7 +342,7 @@ const scrapeAndSave = async (url) => {
       success: true,
       article: article,
       firebaseId: docRef.id,
-      path: `news/articles/${article.category}/${docRef.id}`,
+      path: `news/articles/${categorySlug}/${docRef.id}`,
       isDuplicate: false
     };
   } catch (error) {
