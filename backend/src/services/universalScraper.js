@@ -198,9 +198,6 @@ const setupPage = async (browser, url) => {
   return page;
 };
 
-/**
- * Parse date string to timestamp
- */
 const parseDate = (dateString) => {
   if (!dateString) return Date.now();
 
@@ -215,8 +212,6 @@ const parseDate = (dateString) => {
 
   return Date.now();
 };
-
-
 
 const scrapeUrl = async (url, retryCount = 0) => {
   let browser;

@@ -39,7 +39,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import HomeIcon from '@mui/icons-material/Home'
 import NewspaperIcon from '@mui/icons-material/Newspaper'
-import { getNews, getCategories } from '../src/api/news'
+import { getNews, getCategories } from '../../src/api/news'
 
 export default function NewsPage({ initialArticles, initialCategories, initialPagination, initialFilters }) {
   const router = useRouter()
