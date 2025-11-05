@@ -45,7 +45,10 @@ const triggerN8nWorkflow = async (articleData) => {
     });
     
     console.log('[N8N] ✅ Workflow completed successfully');
-    console.log('[N8N] 📥 Response:', JSON.stringify(response.data, null, 2));
+    console.log('[N8N] 📥 Response status:', response.status);
+    console.log('[N8N] 📥 Response headers:', JSON.stringify(response.headers, null, 2));
+    console.log('[N8N] 📥 Response data type:', typeof response.data);
+    console.log('[N8N] 📥 Response data:', JSON.stringify(response.data, null, 2));
     
     const n8nData = Array.isArray(response.data) ? response.data[0] : response.data;
     console.log('[N8N] 🔍 Extracted n8nData keys:', Object.keys(n8nData));
@@ -98,23 +101,10 @@ const scrapeUrlController = async (req, res, next) => {
 
     const article = await scrapeUrl(url);
 
-    const n8nResult = await triggerN8nWorkflow(article);
-    
-    if (!n8nResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'N8N workflow failed: ' + n8nResult.error,
-        data: { article }
-      });
-    }
-
     const { db, algoliaClient, algoliaIndexName, FieldValue } = require('../config/firebase');
     const { FIREBASE_COLLECTIONS } = require('../utils/constants');
-    const enrichedData = n8nResult.data;
     
-    console.log('[scrapeUrlController] 📊 N8N returned category:', JSON.stringify(enrichedData.category, null, 2));
-    
-    const categorySlug = enrichedData.category?.slug || 'uncategorized';
+    const categorySlug = 'uncategorized';
     const categoryRef = db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
@@ -140,23 +130,17 @@ const scrapeUrlController = async (req, res, next) => {
     }
 
     const finalArticle = {
-      ...enrichedData.article,
+      ...article,
       created_at: Date.now(),
       scraped_at: Date.now()
     };
 
-    if (enrichedData.category?.id) {
-      finalArticle.category_id = enrichedData.category.id;
-    }
-    if (enrichedData.category?.name) {
-      finalArticle.category_name = enrichedData.category.name;
-    }
-    if (enrichedData.category?.slug) {
-      finalArticle.category_slug = enrichedData.category.slug;
-    }
-
     const docRef = await categoryRef.add(finalArticle);
     console.log(`[scrapeUrlController] ✅ Saved to Firebase: news/articles/${categorySlug}/${docRef.id}`);
+
+    triggerN8nWorkflow({ ...article, article_id: docRef.id }).catch(err => {
+      console.error('[scrapeUrlController] N8N trigger failed:', err.message);
+    });
 
     await algoliaClient.saveObject({
       indexName: algoliaIndexName,
@@ -170,21 +154,14 @@ const scrapeUrlController = async (req, res, next) => {
       }
     }).catch(err => console.warn('[scrapeUrlController] Algolia sync failed:', err.message));
 
-    if (enrichedData.category?.id) {
-      await db.collection('categories').doc(enrichedData.category.id).update({
-        total_articles: FieldValue.increment(1),
-        last_scraped_at: Date.now()
-      }).catch(err => console.warn('[scrapeUrlController] Category update failed:', err.message));
-    }
-
     res.json({
       success: true,
-      message: 'Article processed and saved successfully',
+      message: 'Article saved, AI classification in progress',
       data: {
         id: docRef.id,
         article: finalArticle,
         path: `news/articles/${categorySlug}/${docRef.id}`,
-        ai_result: enrichedData.ai_result
+        status: 'pending_classification'
       }
     });
   } catch (error) {
@@ -409,10 +386,166 @@ const detectCategoriesController = async (req, res, next) => {
   }
 };
 
+const n8nCallbackController = async (req, res, next) => {
+  try {
+    const { article_id, category_id, category_name, category_slug } = req.body;
+    
+    if (!article_id || !category_slug) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing article_id or category_slug'
+      });
+    }
+
+    const { db, FieldValue } = require('../config/firebase');
+    const { FIREBASE_COLLECTIONS } = require('../utils/constants');
+    
+    const articleRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection('uncategorized')
+      .doc(article_id);
+    
+    const doc = await articleRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Article not found'
+      });
+    }
+
+    const articleData = doc.data();
+    let finalCategoryId = category_id;
+
+    if (category_id && category_id.startsWith('temp_')) {
+      const categoryRef = db.collection('categories').doc();
+      finalCategoryId = categoryRef.id;
+      
+      await categoryRef.set({
+        id: finalCategoryId,
+        name: category_name,
+        slug: category_slug,
+        source_domain: articleData.source_domain,
+        source_id: articleData.source_id,
+        url: articleData.external_source,
+        total_articles: 0,
+        created_at: Date.now()
+      });
+      
+      console.log(`[n8nCallback] ✅ Created new category: ${category_name} (${finalCategoryId})`);
+    }
+
+    const newCategoryRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection(category_slug);
+
+    const updateData = {
+      ...articleData,
+      category_id: finalCategoryId,
+      category_name,
+      category_slug
+    };
+
+    await newCategoryRef.doc(article_id).set(updateData);
+    await articleRef.delete();
+
+    if (finalCategoryId) {
+      await db.collection('categories').doc(finalCategoryId).update({
+        total_articles: FieldValue.increment(1),
+        last_scraped_at: Date.now()
+      }).catch(err => console.warn('[n8nCallback] Category update failed:', err.message));
+    }
+
+    console.log(`[n8nCallback] ✅ Moved article ${article_id} to ${category_slug}`);
+
+    res.json({
+      success: true,
+      message: 'Article updated with category'
+    });
+  } catch (error) {
+    console.error('[n8nCallbackController] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+const importCategoriesController = async (req, res, next) => {
+  try {
+    const { source_url } = req.body;
+    
+    if (!source_url) {
+      return res.status(400).json({
+        success: false,
+        message: 'source_url is required'
+      });
+    }
+
+    const { detectCategories } = require('../services/homepageDetector');
+    const result = await detectCategories(source_url);
+    
+    const { db } = require('../config/firebase');
+    const categoriesRef = db.collection('categories');
+    
+    let created = 0;
+    let skipped = 0;
+    
+    for (const cat of result.categories) {
+      const slug = cat.name.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      
+      const existing = await categoriesRef.where('slug', '==', slug).limit(1).get();
+      
+      if (existing.empty) {
+        const docRef = categoriesRef.doc();
+        await docRef.set({
+          id: docRef.id,
+          name: cat.name,
+          slug: slug,
+          url: cat.url,
+          source_domain: result.source.domain,
+          source_id: result.source.id,
+          total_articles: 0,
+          created_at: Date.now()
+        });
+        created++;
+        console.log(`[importCategories] ✅ Created: ${cat.name} (${slug})`);
+      } else {
+        skipped++;
+        console.log(`[importCategories] ⏭️  Skipped (exists): ${cat.name}`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Imported ${created} categories, skipped ${skipped} existing`,
+      data: {
+        created,
+        skipped,
+        total: result.categories.length
+      }
+    });
+  } catch (error) {
+    console.error('[importCategoriesController] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   scrapeUrlController,
   scrapeAndSaveController,
   batchScrapeController,
   scrapeSourceController,
-  detectCategoriesController
+  detectCategoriesController,
+  n8nCallbackController,
+  importCategoriesController
 };
