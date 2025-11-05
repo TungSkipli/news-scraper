@@ -8,7 +8,8 @@ const triggerN8nWorkflow = async (articleData) => {
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'https://vnuphammanhtu.app.n8n.cloud/webhook/afamily-scraper';
   
   try {
-    console.log('[N8N] Triggering workflow with article:', articleData.title);
+    console.log('[N8N] 🚀 Triggering workflow for article:', articleData.title);
+    console.log('[N8N] 📋 Article ID:', articleData.article_id);
     
     const { db } = require('../config/firebase');
     const categoriesSnapshot = await db.collection('categories').get();
@@ -22,10 +23,7 @@ const triggerN8nWorkflow = async (articleData) => {
       total_articles: doc.data().total_articles || 0
     }));
     
-    console.log(`[N8N] 📊 Loaded ${categories.length} categories from Firebase`);
-    if (categories.length === 0) {
-      console.warn('[N8N] ⚠️ WARNING: No categories found in Firebase!');
-    }
+    console.log(`[N8N] 📊 Loaded ${categories.length} categories`);
     
     const payload = {
       article: articleData,
@@ -33,57 +31,16 @@ const triggerN8nWorkflow = async (articleData) => {
       categories_count: categories.length
     };
     
-    console.log('[N8N] 📤 Sending payload:', JSON.stringify({ 
-      article_title: articleData.title, 
-      categories_count: categories.length,
-      category_names: categories.map(c => c.name) 
-    }));
-    
-    const response = await axios.post(n8nWebhookUrl, payload, {
+    await axios.post(n8nWebhookUrl, payload, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 60000
+      timeout: 90000
     });
     
-    console.log('[N8N] ✅ Workflow completed successfully');
-    console.log('[N8N] 📥 Response status:', response.status);
-    console.log('[N8N] 📥 Response headers:', JSON.stringify(response.headers, null, 2));
-    console.log('[N8N] 📥 Response data type:', typeof response.data);
-    console.log('[N8N] 📥 Response data:', JSON.stringify(response.data, null, 2));
-    
-    const n8nData = Array.isArray(response.data) ? response.data[0] : response.data;
-    console.log('[N8N] 🔍 Extracted n8nData keys:', Object.keys(n8nData));
-    console.log('[N8N] 🔍 Full n8nData:', n8nData);
-    
-    if (n8nData.message) {
-      console.log('[N8N] ⚠️ N8N returned message:', n8nData.message);
-      try {
-        const parsedMessage = JSON.parse(n8nData.message);
-        console.log('[N8N] 🔍 Parsed message:', parsedMessage);
-        Object.assign(n8nData, parsedMessage);
-      } catch (e) {
-        console.log('[N8N] ⚠️ Message is not JSON');
-      }
-    }
-    
-    console.log('[N8N] 🔍 category_id:', n8nData.category_id);
-    console.log('[N8N] 🔍 category_name:', n8nData.category_name);
-    console.log('[N8N] 🔍 category_slug:', n8nData.category_slug);
-    
-    return { 
-      success: true, 
-      data: {
-        article: n8nData.article || articleData,
-        category: {
-          id: n8nData.category_id,
-          name: n8nData.category_name,
-          slug: n8nData.category_slug
-        },
-        ai_result: n8nData.ai_result || null
-      }
-    };
+    console.log('[N8N] ✅ Workflow triggered successfully');
+    return { success: true };
   } catch (error) {
     console.error('[N8N] ❌ Failed to trigger workflow:', error.message);
-    return { success: false, error: error.message };
+    throw error;
   }
 };
 
@@ -99,68 +56,72 @@ const scrapeUrlController = async (req, res, next) => {
       });
     }
 
+    console.log(`[scrapeUrlController] 🔍 Scraping: ${url}`);
     const article = await scrapeUrl(url);
 
-    const { db, algoliaClient, algoliaIndexName, FieldValue } = require('../config/firebase');
+    const { db, algoliaClient, algoliaIndexName } = require('../config/firebase');
     const { FIREBASE_COLLECTIONS } = require('../utils/constants');
     
-    const categorySlug = 'uncategorized';
-    const categoryRef = db
-      .collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(categorySlug);
-
-    const existingArticle = await categoryRef
-      .where('external_source', '==', article.external_source)
-      .limit(1)
-      .get();
-
-    if (!existingArticle.empty) {
-      const existingDoc = existingArticle.docs[0];
-      console.log(`[scrapeUrlController] ⚠️  Article already exists in Firebase`);
-      return res.json({
-        success: true,
-        message: 'Article already exists',
-        data: {
-          id: existingDoc.id,
-          article: existingDoc.data(),
-          isDuplicate: true
-        }
-      });
+    const articleUrl = article.url || article.external_source;
+    
+    if (articleUrl) {
+      const uncategorizedRef = db
+        .collection(FIREBASE_COLLECTIONS.NEWS)
+        .doc(FIREBASE_COLLECTIONS.ARTICLES)
+        .collection('uncategorized');
+      
+      const existingUncategorized = await uncategorizedRef
+        .where('external_source', '==', articleUrl)
+        .limit(1)
+        .get();
+      
+      if (!existingUncategorized.empty) {
+        const existingDoc = existingUncategorized.docs[0];
+        console.log(`[scrapeUrlController] ⚠️  Article exists in uncategorized`);
+        return res.json({
+          success: true,
+          message: 'Article already exists (pending classification)',
+          data: {
+            id: existingDoc.id,
+            article: existingDoc.data(),
+            isDuplicate: true
+          }
+        });
+      }
     }
 
-    const finalArticle = {
+    const articleData = {
       ...article,
       created_at: Date.now(),
-      scraped_at: Date.now()
+      scraped_at: Date.now(),
+      ai_classified: false
     };
 
-    const docRef = await categoryRef.add(finalArticle);
-    console.log(`[scrapeUrlController] ✅ Saved to Firebase: news/articles/${categorySlug}/${docRef.id}`);
+    const uncategorizedRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection('uncategorized');
 
-    triggerN8nWorkflow({ ...article, article_id: docRef.id }).catch(err => {
-      console.error('[scrapeUrlController] N8N trigger failed:', err.message);
-    });
+    const docRef = await uncategorizedRef.add(articleData);
+    console.log(`[scrapeUrlController] ✅ Saved to uncategorized: ${docRef.id}`);
 
-    await algoliaClient.saveObject({
-      indexName: algoliaIndexName,
-      body: {
-        objectID: docRef.id,
-        title: finalArticle.title,
-        summary: finalArticle.summary || '',
-        category: categorySlug,
-        image: finalArticle.image?.url || '',
-        published_at: finalArticle.published_at
-      }
-    }).catch(err => console.warn('[scrapeUrlController] Algolia sync failed:', err.message));
+    const articleWithId = {
+      ...articleData,
+      article_id: docRef.id
+    };
+
+    console.log('[scrapeUrlController] 🤖 Triggering n8n workflow for AI classification...');
+    triggerN8nWorkflow(articleWithId).catch(err => 
+      console.error('[scrapeUrlController] ⚠️ N8n trigger failed:', err.message)
+    );
 
     res.json({
       success: true,
-      message: 'Article saved, AI classification in progress',
+      message: 'Article saved to uncategorized, AI classification in progress',
       data: {
         id: docRef.id,
-        article: finalArticle,
-        path: `news/articles/${categorySlug}/${docRef.id}`,
+        article: articleData,
+        path: `news/articles/uncategorized/${docRef.id}`,
         status: 'pending_classification'
       }
     });
@@ -388,16 +349,24 @@ const detectCategoriesController = async (req, res, next) => {
 
 const n8nCallbackController = async (req, res, next) => {
   try {
+    console.log('[n8nCallback] 📥 Full request body:', JSON.stringify(req.body, null, 2));
+    
     const { article_id, category_id, category_name, category_slug } = req.body;
     
+    console.log('[n8nCallback] 📋 Parsed:', { article_id, category_id, category_name, category_slug });
+    
     if (!article_id || !category_slug) {
+      console.error('[n8nCallback] ❌ Missing required fields!');
+      console.error('[n8nCallback] article_id:', article_id);
+      console.error('[n8nCallback] category_slug:', category_slug);
       return res.status(400).json({
         success: false,
-        message: 'Missing article_id or category_slug'
+        message: 'Missing article_id or category_slug',
+        received: { article_id, category_id, category_name, category_slug }
       });
     }
 
-    const { db, FieldValue } = require('../config/firebase');
+    const { db, FieldValue, algoliaClient, algoliaIndexName } = require('../config/firebase');
     const { FIREBASE_COLLECTIONS } = require('../utils/constants');
     
     const articleRef = db
@@ -410,12 +379,12 @@ const n8nCallbackController = async (req, res, next) => {
     if (!doc.exists) {
       return res.status(404).json({
         success: false,
-        message: 'Article not found'
+        message: 'Article not found in uncategorized'
       });
     }
 
     const articleData = doc.data();
-    let finalCategoryId = category_id;
+    let finalCategoryId = category_id || null;
 
     if (category_id && category_id.startsWith('temp_')) {
       const categoryRef = db.collection('categories').doc();
@@ -443,21 +412,36 @@ const n8nCallbackController = async (req, res, next) => {
     const updateData = {
       ...articleData,
       category_id: finalCategoryId,
-      category_name,
-      category_slug
+      category_name: category_name || 'Uncategorized',
+      category_slug: category_slug,
+      category: category_slug,
+      ai_classified: true,
+      classified_at: Date.now()
     };
 
     await newCategoryRef.doc(article_id).set(updateData);
     await articleRef.delete();
 
-    if (finalCategoryId) {
+    await algoliaClient.saveObject({
+      indexName: algoliaIndexName,
+      body: {
+        objectID: article_id,
+        title: updateData.title,
+        summary: updateData.summary || '',
+        category: category_slug,
+        image: updateData.image?.url || '',
+        published_at: updateData.published_at
+      }
+    }).catch(err => console.warn('[n8nCallback] Algolia sync failed:', err.message));
+
+    if (finalCategoryId && finalCategoryId !== 'uncategorized') {
       await db.collection('categories').doc(finalCategoryId).update({
         total_articles: FieldValue.increment(1),
         last_scraped_at: Date.now()
       }).catch(err => console.warn('[n8nCallback] Category update failed:', err.message));
     }
 
-    console.log(`[n8nCallback] ✅ Moved article ${article_id} to ${category_slug}`);
+    console.log(`[n8nCallback] ✅ Moved article ${article_id} from uncategorized → ${category_slug}`);
 
     res.json({
       success: true,

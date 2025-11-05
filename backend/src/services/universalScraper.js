@@ -287,15 +287,111 @@ const scrapeUrl = async (url, retryCount = 0) => {
   }
 };
 
-const scrapeAndSave = async (url, categorySlug = 'uncategorized') => {
+const triggerN8nForClassification = async (articleData) => {
+  const axios = require('axios');
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'https://vnuphammanhtu.app.n8n.cloud/webhook/afamily-scraper';
+  
+  try {
+    console.log('[N8N] 🚀 Triggering AI classification for:', articleData.title);
+    
+    const categoriesSnapshot = await db.collection('categories').get();
+    const categories = categoriesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      name: doc.data().name,
+      slug: doc.data().slug,
+      url: doc.data().url,
+      source_domain: doc.data().source_domain,
+      source_id: doc.data().source_id,
+      total_articles: doc.data().total_articles || 0
+    }));
+    
+    console.log(`[N8N] 📊 Loaded ${categories.length} categories`);
+    
+    const payload = {
+      article: articleData,
+      categories: categories,
+      categories_count: categories.length
+    };
+    
+    const response = await axios.post(n8nWebhookUrl, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 90000
+    });
+    
+    console.log('[N8N] ✅ AI classification completed');
+    console.log('[N8N] 📥 Raw response:', JSON.stringify(response.data, null, 2));
+    
+    const n8nData = Array.isArray(response.data) ? response.data[0] : response.data;
+    
+    if (n8nData.message) {
+      try {
+        const parsedMessage = JSON.parse(n8nData.message);
+        Object.assign(n8nData, parsedMessage);
+      } catch (e) {}
+    }
+    
+    console.log('[N8N] 📦 Parsed data:', JSON.stringify(n8nData, null, 2));
+    console.log('[N8N] 🎯 Category:', n8nData.category_slug || 'uncategorized');
+    
+    return { 
+      success: true, 
+      category: {
+        id: n8nData.category_id || null,
+        name: n8nData.category_name || 'Uncategorized',
+        slug: n8nData.category_slug || 'uncategorized'
+      }
+    };
+  } catch (error) {
+    console.error('[N8N] ❌ Classification failed:', error.message);
+    return { 
+      success: false, 
+      error: error.message,
+      category: {
+        id: null,
+        name: 'Uncategorized',
+        slug: 'uncategorized'
+      }
+    };
+  }
+};
+
+const scrapeAndSave = async (url, categorySlug = null) => {
   try {
     console.log(`[scrapeAndSave] 🔍 Scraping URL: ${url}`);
     const article = await scrapeUrl(url);
 
+    const uncategorizedRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection('uncategorized');
+    
+    const existingUncategorized = await uncategorizedRef
+      .where('external_source', '==', url)
+      .limit(1)
+      .get();
+    
+    if (!existingUncategorized.empty) {
+      const existingDoc = existingUncategorized.docs[0];
+      console.log(`[scrapeAndSave] ⚠️  DUPLICATE in uncategorized`);
+      return {
+        success: true,
+        article: existingDoc.data(),
+        firebaseId: existingDoc.id,
+        path: `news/articles/uncategorized/${existingDoc.id}`,
+        isDuplicate: true
+      };
+    }
+
+    console.log('[scrapeAndSave] 🤖 Triggering AI classification...');
+    const classificationResult = await triggerN8nForClassification(article);
+    
+    const aiCategory = classificationResult.category.slug;
+    console.log(`[scrapeAndSave] 🎯 AI classified as: ${aiCategory}`);
+
     const categoryRef = db
       .collection(FIREBASE_COLLECTIONS.NEWS)
       .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(categorySlug);
+      .collection(aiCategory);
     
     const existingArticle = await categoryRef
       .where('external_source', '==', url)
@@ -304,40 +400,49 @@ const scrapeAndSave = async (url, categorySlug = 'uncategorized') => {
     
     if (!existingArticle.empty) {
       const existingDoc = existingArticle.docs[0];
-      console.log(`[scrapeAndSave] ⚠️  DUPLICATE DETECTED - Article already exists`);
-      console.log(`[scrapeAndSave] Path: news/articles/${categorySlug}/${existingDoc.id}`);
-      console.log(`[scrapeAndSave] URL: ${url}`);
-      
+      console.log(`[scrapeAndSave] ⚠️  DUPLICATE in ${aiCategory}`);
       return {
         success: true,
         article: existingDoc.data(),
         firebaseId: existingDoc.id,
-        path: `news/articles/${categorySlug}/${existingDoc.id}`,
+        path: `news/articles/${aiCategory}/${existingDoc.id}`,
         isDuplicate: true
       };
     }
 
-    const docRef = await categoryRef.add(article);
+    const enrichedArticle = {
+      ...article,
+      category_id: classificationResult.category.id,
+      category_name: classificationResult.category.name,
+      category_slug: aiCategory,
+      category: aiCategory,
+      created_at: Date.now(),
+      scraped_at: Date.now(),
+      ai_classified: classificationResult.success
+    };
+
+    const docRef = await categoryRef.add(enrichedArticle);
 
     await algoliaClient.saveObject({
       indexName: algoliaIndexName,
       body: {
         objectID: docRef.id,
-        title: article.title,
-        summary: article.summary,
-        category: categorySlug,
-        image: article.image.url,
-        published_at: article.published_at
+        title: enrichedArticle.title,
+        summary: enrichedArticle.summary,
+        category: aiCategory,
+        image: enrichedArticle.image.url,
+        published_at: enrichedArticle.published_at
       }
     });
 
-    console.log(`[scrapeAndSave] ✅ Article synced to Algolia`);
+    console.log(`[scrapeAndSave] ✅ Saved to: news/articles/${aiCategory}/${docRef.id}`);
 
     return {
       success: true,
-      article: article,
+      article: enrichedArticle,
       firebaseId: docRef.id,
-      path: `news/articles/${categorySlug}/${docRef.id}`,
+      path: `news/articles/${aiCategory}/${docRef.id}`,
+      category: aiCategory,
       isDuplicate: false
     };
   } catch (error) {

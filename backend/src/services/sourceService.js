@@ -93,62 +93,97 @@ const saveCategory = async (sourceId, sourceDomain, categoryData) => {
   }
 };
 
-const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
+const triggerN8nWorkflowSync = async (articleData) => {
+  const axios = require('axios');
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'https://vnuphammanhtu.app.n8n.cloud/webhook/afamily-scraper';
+  
   try {
-    let normalizedCategory;
+    console.log('[N8N-Sync] 🚀 Triggering workflow for AI classification:', articleData.title);
     
-    if (articleData.category && articleData.category !== 'uncategorized') {
-      normalizedCategory = articleData.category;
-      console.log(`[saveArticle] Using category from article URL: ${normalizedCategory}`);
-    } else {
-      normalizedCategory = normalizeCategory(categoryInfo.name);
-      console.log(`[saveArticle] Using category from detection: ${normalizedCategory}`);
+    const categoriesSnapshot = await db.collection('categories').get();
+    const categories = categoriesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      name: doc.data().name,
+      slug: doc.data().slug,
+      url: doc.data().url,
+      source_domain: doc.data().source_domain,
+      source_id: doc.data().source_id,
+      total_articles: doc.data().total_articles || 0
+    }));
+    
+    console.log(`[N8N-Sync] 📊 Loaded ${categories.length} categories from Firebase`);
+    
+    const payload = {
+      article: articleData,
+      categories: categories,
+      categories_count: categories.length
+    };
+    
+    const response = await axios.post(n8nWebhookUrl, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 90000
+    });
+    
+    console.log('[N8N-Sync] ✅ AI classification completed');
+    console.log('[N8N-Sync] 📥 Raw response:', JSON.stringify(response.data, null, 2));
+    
+    const n8nData = Array.isArray(response.data) ? response.data[0] : response.data;
+    
+    if (n8nData.message) {
+      try {
+        const parsedMessage = JSON.parse(n8nData.message);
+        Object.assign(n8nData, parsedMessage);
+      } catch (e) {}
     }
     
+    console.log('[N8N-Sync] 📦 Parsed data:', JSON.stringify(n8nData, null, 2));
+    console.log('[N8N-Sync] 🎯 AI Category:', n8nData.category_slug || 'uncategorized');
+    
+    return { 
+      success: true, 
+      category: {
+        id: n8nData.category_id || null,
+        name: n8nData.category_name || 'Uncategorized',
+        slug: n8nData.category_slug || 'uncategorized'
+      }
+    };
+  } catch (error) {
+    console.error('[N8N-Sync] ❌ Failed to classify article:', error.message);
+    return { 
+      success: false, 
+      error: error.message,
+      category: {
+        id: null,
+        name: 'Uncategorized',
+        slug: 'uncategorized'
+      }
+    };
+  }
+};
 
-    const categoryRef = db
-      .collection(FIREBASE_COLLECTIONS.NEWS)
-      .doc(FIREBASE_COLLECTIONS.ARTICLES)
-      .collection(normalizedCategory);
-
+const saveArticle = async (articleData, sourceInfo, categoryInfo = null) => {
+  try {
     const articleUrl = articleData.url || articleData.external_source;
     
-    if (!articleUrl) {
-      console.warn('[saveArticle] Warning: Article has no URL, cannot check for duplicates');
-    } else {
-      const existingArticle = await categoryRef
+    if (articleUrl) {
+      const uncategorizedRef = db
+        .collection(FIREBASE_COLLECTIONS.NEWS)
+        .doc(FIREBASE_COLLECTIONS.ARTICLES)
+        .collection('uncategorized');
+        
+      const existingUncategorized = await uncategorizedRef
         .where('external_source', '==', articleUrl)
         .limit(1)
         .get();
-      
-      if (!existingArticle.empty) {
-        const existingDoc = existingArticle.docs[0];
-        console.log(`[saveArticle] ⚠️  DUPLICATE DETECTED - Article already exists at: news/articles/${normalizedCategory}/${existingDoc.id}`);
-        console.log(`[saveArticle] URL: ${articleUrl}`);
+        
+      if (!existingUncategorized.empty) {
+        const existingDoc = existingUncategorized.docs[0];
+        console.log(`[saveArticle] ⚠️  DUPLICATE in uncategorized: ${articleUrl}`);
         return { 
           id: existingDoc.id, 
           ...existingDoc.data(),
           isDuplicate: true 
         };
-      }
-      
-      if (articleData.slug) {
-        const existingBySlug = await categoryRef
-          .where('slug', '==', articleData.slug)
-          .where('source_id', '==', sourceInfo.id)
-          .limit(1)
-          .get();
-        
-        if (!existingBySlug.empty) {
-          const existingDoc = existingBySlug.docs[0];
-          console.log(`[saveArticle] ⚠️  DUPLICATE DETECTED (by slug) - Article already exists at: news/articles/${normalizedCategory}/${existingDoc.id}`);
-          console.log(`[saveArticle] Slug: ${articleData.slug}`);
-          return { 
-            id: existingDoc.id, 
-            ...existingDoc.data(),
-            isDuplicate: true 
-          };
-        }
       }
     }
 
@@ -157,41 +192,33 @@ const saveArticle = async (articleData, sourceInfo, categoryInfo) => {
       source_id: sourceInfo.id,
       source_name: sourceInfo.name,
       source_domain: sourceInfo.domain,
-      category_id: categoryInfo.id,
-      category_name: categoryInfo.name,
-      category_slug: categoryInfo.slug,
-      category: normalizedCategory,
-      scraped_at: Date.now()
+      scraped_at: Date.now(),
+      ai_classified: false
     };
 
-    const docRef = await categoryRef.add(enrichedArticle);
+    const uncategorizedRef = db
+      .collection(FIREBASE_COLLECTIONS.NEWS)
+      .doc(FIREBASE_COLLECTIONS.ARTICLES)
+      .collection('uncategorized');
 
-    console.log(`[saveArticle] Saved article to: news/articles/${normalizedCategory}/${docRef.id}`);
+    const docRef = await uncategorizedRef.add(enrichedArticle);
+    console.log(`[saveArticle] ✅ Saved to uncategorized: ${docRef.id}`);
 
-    await algoliaClient.saveObject({
-      indexName: algoliaIndexName,
-      body: {
-        objectID: docRef.id,
-        title: enrichedArticle.title,
-        summary: enrichedArticle.summary || '',
-        category: normalizedCategory,
-        image: enrichedArticle.image?.url || '',
-        published_at: enrichedArticle.published_at
-      }
-    });
+    const articleWithId = {
+      ...enrichedArticle,
+      article_id: docRef.id
+    };
 
-    console.log(`[saveArticle] Synced to Algolia: ${docRef.id}`);
-
+    console.log('[saveArticle] 🤖 Triggering n8n for AI classification...');
+    triggerN8nWorkflowSync(articleWithId).catch(err =>
+      console.error('[saveArticle] ⚠️ N8n trigger failed:', err.message)
+    );
 
     await db.collection(COLLECTIONS.SOURCES).doc(sourceInfo.id).update({
       total_articles: FieldValue.increment(1)
-    });
+    }).catch(err => console.warn('[saveArticle] Source update failed:', err.message));
 
-    await db.collection(COLLECTIONS.CATEGORIES).doc(categoryInfo.id).update({
-      total_articles: FieldValue.increment(1)
-    });
-
-    return { id: docRef.id, ...enrichedArticle };
+    return { id: docRef.id, ...enrichedArticle, isDuplicate: false, status: 'pending_classification' };
 
   } catch (error) {
     console.error('[saveArticle] Error:', error);
