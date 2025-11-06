@@ -207,7 +207,6 @@ const parseDate = (dateString) => {
       return date.getTime();
     }
   } catch (e) {
-    console.error('[parseDate] Error:', e);
   }
 
   return Date.now();
@@ -278,7 +277,6 @@ const scrapeUrl = async (url, retryCount = 0) => {
     }
 
     if (retryCount < SCRAPER_CONFIG.MAX_RETRIES) {
-      console.log(`[scrapeUrl] Retry ${retryCount + 1}/${SCRAPER_CONFIG.MAX_RETRIES} for ${url}`);
       await new Promise(resolve => setTimeout(resolve, SCRAPER_CONFIG.RETRY_DELAY));
       return await scrapeUrl(url, retryCount + 1);
     }
@@ -292,8 +290,6 @@ const triggerN8nForClassification = async (articleData) => {
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'https://vnuphammanhtu.app.n8n.cloud/webhook/afamily-scraper';
   
   try {
-    console.log('[N8N] 🚀 Triggering AI classification for:', articleData.title);
-    
     const categoriesSnapshot = await db.collection('categories').get();
     const categories = categoriesSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -304,8 +300,6 @@ const triggerN8nForClassification = async (articleData) => {
       source_id: doc.data().source_id,
       total_articles: doc.data().total_articles || 0
     }));
-    
-    console.log(`[N8N] 📊 Loaded ${categories.length} categories`);
     
     const payload = {
       article: articleData,
@@ -318,9 +312,6 @@ const triggerN8nForClassification = async (articleData) => {
       timeout: 90000
     });
     
-    console.log('[N8N] ✅ AI classification completed');
-    console.log('[N8N] 📥 Raw response:', JSON.stringify(response.data, null, 2));
-    
     const n8nData = Array.isArray(response.data) ? response.data[0] : response.data;
     
     if (n8nData.message) {
@@ -329,9 +320,6 @@ const triggerN8nForClassification = async (articleData) => {
         Object.assign(n8nData, parsedMessage);
       } catch (e) {}
     }
-    
-    console.log('[N8N] 📦 Parsed data:', JSON.stringify(n8nData, null, 2));
-    console.log('[N8N] 🎯 Category:', n8nData.category_slug || 'uncategorized');
     
     return { 
       success: true, 
@@ -342,7 +330,6 @@ const triggerN8nForClassification = async (articleData) => {
       }
     };
   } catch (error) {
-    console.error('[N8N] ❌ Classification failed:', error.message);
     return { 
       success: false, 
       error: error.message,
@@ -357,7 +344,6 @@ const triggerN8nForClassification = async (articleData) => {
 
 const scrapeAndSave = async (url, categorySlug = null) => {
   try {
-    console.log(`[scrapeAndSave] 🔍 Scraping URL: ${url}`);
     const article = await scrapeUrl(url);
 
     const uncategorizedRef = db
@@ -372,7 +358,6 @@ const scrapeAndSave = async (url, categorySlug = null) => {
     
     if (!existingUncategorized.empty) {
       const existingDoc = existingUncategorized.docs[0];
-      console.log(`[scrapeAndSave] ⚠️  DUPLICATE in uncategorized`);
       return {
         success: true,
         article: existingDoc.data(),
@@ -382,11 +367,9 @@ const scrapeAndSave = async (url, categorySlug = null) => {
       };
     }
 
-    console.log('[scrapeAndSave] 🤖 Triggering AI classification...');
     const classificationResult = await triggerN8nForClassification(article);
     
     const aiCategory = classificationResult.category.slug;
-    console.log(`[scrapeAndSave] 🎯 AI classified as: ${aiCategory}`);
 
     const categoryRef = db
       .collection(FIREBASE_COLLECTIONS.NEWS)
@@ -400,7 +383,6 @@ const scrapeAndSave = async (url, categorySlug = null) => {
     
     if (!existingArticle.empty) {
       const existingDoc = existingArticle.docs[0];
-      console.log(`[scrapeAndSave] ⚠️  DUPLICATE in ${aiCategory}`);
       return {
         success: true,
         article: existingDoc.data(),
@@ -435,8 +417,6 @@ const scrapeAndSave = async (url, categorySlug = null) => {
       }
     });
 
-    console.log(`[scrapeAndSave] ✅ Saved to: news/articles/${aiCategory}/${docRef.id}`);
-
     return {
       success: true,
       article: enrichedArticle,
@@ -446,7 +426,6 @@ const scrapeAndSave = async (url, categorySlug = null) => {
       isDuplicate: false
     };
   } catch (error) {
-    console.error('[scrapeAndSave] Error:', error);
     throw error;
   }
 };

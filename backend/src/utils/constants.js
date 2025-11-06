@@ -136,7 +136,6 @@ const UNIVERSAL_SELECTORS = {
 };
 
 const CATEGORY_MAPPING = {
-  // Education
   'giáo dục': 'education',
   'giao duc': 'education',
   'giaoduc': 'education',
@@ -146,7 +145,6 @@ const CATEGORY_MAPPING = {
   'hoctap': 'education',
   'edu': 'education',
   
-  // Society & Lifestyle
   'xã hội': 'society',
   'xa hoi': 'society',
   'xahoi': 'society',
@@ -157,7 +155,6 @@ const CATEGORY_MAPPING = {
   'lifestyle': 'society',
   'life': 'society',
   
-  // Entertainment
   'giải trí': 'entertainment',
   'giai tri': 'entertainment',
   'giaitri': 'entertainment',
@@ -178,7 +175,6 @@ const CATEGORY_MAPPING = {
   'music': 'entertainment',
   'movie': 'entertainment',
   
-  // Sports
   'thể thao': 'sports',
   'the thao': 'sports',
   'thethao': 'sports',
@@ -190,7 +186,6 @@ const CATEGORY_MAPPING = {
   'football': 'sports',
   'soccer': 'sports',
   
-  // Business & Economy
   'kinh doanh': 'business',
   'kinhdoanh': 'business',
   'kinh tế': 'business',
@@ -206,7 +201,6 @@ const CATEGORY_MAPPING = {
   'bizlive': 'business',
   'cafef': 'business',
   
-  // Technology & Science
   'công nghệ': 'technology',
   'cong nghe': 'technology',
   'congnghe': 'technology',
@@ -219,11 +213,10 @@ const CATEGORY_MAPPING = {
   'digital': 'technology',
   'ictnews': 'technology',
   'genk': 'technology',
-  'so': 'technology', // số (digital)
+  'so': 'technology',
   'ai': 'technology',
   'cntt': 'technology',
   
-  // Health
   'sức khỏe': 'health',
   'suc khoe': 'health',
   'suckhoe': 'health',
@@ -235,7 +228,6 @@ const CATEGORY_MAPPING = {
   'sức khoẻ': 'health',
   'suc khoe': 'health',
   
-  // Law
   'pháp luật': 'law',
   'phap luat': 'law',
   'phapluat': 'law',
@@ -246,14 +238,12 @@ const CATEGORY_MAPPING = {
   'hình sự': 'law',
   'hinh su': 'law',
   
-  // Travel
   'du lịch': 'travel',
   'du lich': 'travel',
   'dulich': 'travel',
   'travel': 'travel',
   'tourism': 'travel',
   
-  // Automotive
   'ô tô': 'automotive',
   'o to': 'automotive',
   'oto': 'automotive',
@@ -264,7 +254,6 @@ const CATEGORY_MAPPING = {
   'xe hoi': 'automotive',
   'xehoi': 'automotive',
   
-  // News & Current Events
   'thời sự': 'news',
   'thoi su': 'news',
   'thoisu': 'news',
@@ -276,13 +265,11 @@ const CATEGORY_MAPPING = {
   'trending': 'news',
   'hot': 'news',
   
-  // Politics
   'chính trị': 'politics',
   'chinh tri': 'politics',
   'chinhtri': 'politics',
   'politics': 'politics',
   
-  // World & International
   'thế giới': 'world',
   'the gioi': 'world',
   'thegioi': 'world',
@@ -293,7 +280,6 @@ const CATEGORY_MAPPING = {
   'international': 'world',
   'global': 'world',
   
-  // Real Estate
   'bất động sản': 'realestate',
   'bat dong san': 'realestate',
   'batdongsan': 'realestate',
@@ -303,7 +289,6 @@ const CATEGORY_MAPPING = {
   'nha dat': 'realestate',
   'nhadat': 'realestate',
   
-  // Food
   'ẩm thực': 'food',
   'am thuc': 'food',
   'amthuc': 'food',
@@ -314,41 +299,25 @@ const CATEGORY_MAPPING = {
   'monan': 'food'
 };
 
-/**
- * Normalize category name to standard format
- * Returns 'uncategorized' if category cannot be determined
- * 
- * @param {string} category - Raw category name from URL or metadata
- * @param {object} options - Additional options for category detection
- * @returns {string} Normalized category name
- */
 const normalizeCategory = (category, options = {}) => {
   if (!category) {
-    console.warn('[normalizeCategory] No category provided, using fallback');
     return 'uncategorized';
   }
   
   const normalized = category.toLowerCase().trim()
-    .replace(/[-_]/g, ' ') // Convert dashes/underscores to spaces
-    .replace(/\s+/g, ' '); // Normalize multiple spaces
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ');
   
-  // Direct match
   if (CATEGORY_MAPPING[normalized]) {
     return CATEGORY_MAPPING[normalized];
   }
   
-  // Fuzzy match: check if any key is contained in the category
   for (const [key, value] of Object.entries(CATEGORY_MAPPING)) {
     if (normalized.includes(key) || key.includes(normalized)) {
-      console.log(`[normalizeCategory] Fuzzy matched: "${category}" -> "${value}"`);
       return value;
     }
   }
   
-  // Still couldn't categorize
-  console.warn(`[normalizeCategory] Could not categorize: "${category}", using fallback`);
-  
-  // If strict mode, keep original category as slug
   if (options.keepOriginal) {
     return category.toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
@@ -359,7 +328,6 @@ const normalizeCategory = (category, options = {}) => {
   return 'uncategorized';
 };
 
-// Firebase path: news/articles/{category}/:id
 const FIREBASE_COLLECTIONS = {
   NEWS: 'news',
   ARTICLES: 'articles'

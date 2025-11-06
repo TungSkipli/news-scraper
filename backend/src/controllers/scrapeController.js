@@ -264,7 +264,6 @@ const scrapeSourceController = async (req, res, next) => {
       });
     }
 
-    // Single category mode
     if (options?.mode === 'single' && options?.categoryUrl) {
       const detection = await detectCategories(url);
       const category = detection.categories.find(cat => cat.url === options.categoryUrl);
