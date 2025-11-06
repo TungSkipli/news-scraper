@@ -1,0 +1,297 @@
+{
+  "name": "Afamily Article Scraper with AI Classification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "afamily-scraper",
+        "options": {}
+      },
+      "id": "3ea24070-8cc4-4468-b911-37f93c324324",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        -144
+      ],
+      "webhookId": "afamily-auto-scraper",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $input.first().json;\n\nconsole.log('[Store] Full input:', JSON.stringify($input.first(), null, 2));\nconsole.log('[Store] Webhook data keys:', Object.keys(webhookData));\n\nlet categoriesData, articleData;\n\nif (webhookData.body) {\n  console.log('[Store] Found body wrapper');\n  const body = webhookData.body;\n  categoriesData = body.categories;\n  articleData = body.article;\n} else {\n  console.log('[Store] No body wrapper');\n  categoriesData = webhookData.categories;\n  articleData = webhookData.article;\n}\n\nif (!categoriesData || !Array.isArray(categoriesData)) {\n  categoriesData = [];\n  console.warn('[Store] ⚠️ Categories not found, using empty array');\n}\n\nif (!articleData) {\n  throw new Error('[Store] Article data not found');\n}\n\nconst categoriesText = categoriesData.length > 0 \n  ? categoriesData.map(cat => \n      `- ID: ${cat.id}\\n  Name: ${cat.name}\\n  Slug: ${cat.slug}\\n  Domain: ${cat.source_domain}\\n  URL: ${cat.url || 'N/A'}`\n    ).join('\\n\\n')\n  : '(Chưa có category nào - AI sẽ tạo category mới)';\n\nconsole.log('[Store] Received article:', articleData.title);\nconsole.log('[Store] Article ID:', articleData.article_id);\nconsole.log('[Store] Categories count:', categoriesData.length);\n\nif (categoriesData.length === 0) {\n  console.warn('[Store] ⚠️ WARNING: No categories available! AI will create new category.');\n}\n\nreturn {\n  json: {\n    categories: categoriesData,\n    categoriesText: categoriesText,\n    categoriesCount: categoriesData.length,\n    article: articleData,\n    article_id: articleData.article_id\n  }\n};\n"
+      },
+      "id": "df6bf85f-8d12-4183-99e4-cb99f07c86d5",
+      "name": "Store Categories in Memory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-5678-90ab",
+              "leftValue": "={{ $json.output.decision.match_found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1c659426-06a9-4526-acb8-7581a5c86939",
+      "name": "IF Match Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://7slzr34g-5000.asse.devtunnels.ms/api/categories/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{ $('Parse AI Output').item.json.output.decision.suggested_name }}\",\n  \"slug\": \"{{ $('Parse AI Output').item.json.output.decision.suggested_slug }}\",\n  \"source_id\": \"{{ $('Store Categories in Memory').item.json.article.source_id || '' }}\",\n  \"source_domain\": \"{{ $('Store Categories in Memory').item.json.article.source_domain || '' }}\",\n  \"url\": \"\"\n}",
+        "options": {}
+      },
+      "id": "cfd8136e-7745-4b36-94f6-e40c40969891",
+      "name": "Create New Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1760,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storedData = $('Store Categories in Memory').first().json;\nconst articleData = storedData.article;\nconst articleId = storedData.article_id;\nconst currentInput = $input.first().json;\n\nconsole.log('[Prepare] Article ID:', articleId);\nconsole.log('[Prepare] Current input:', JSON.stringify(currentInput, null, 2));\n\nlet categoryId, categoryName, categorySlug;\n\nif (currentInput.data && currentInput.data.id) {\n  const newCat = currentInput.data;\n  categoryId = newCat.id;\n  categoryName = newCat.name;\n  categorySlug = newCat.slug;\n  console.log(`[Prepare] Sử dụng category MỚI vừa tạo: ${categoryName} (${categoryId})`);\n} else {\n  try {\n    const aiResult = $('Parse AI Output').first().json.output.decision;\n    console.log('[Prepare] AI result:', JSON.stringify(aiResult, null, 2));\n    if (aiResult.category_id) {\n      categoryId = aiResult.category_id;\n      categoryName = aiResult.category_name;\n      categorySlug = aiResult.category_slug;\n      console.log(`[Prepare] ✅ Category CÓ SẴN: ${categoryName}`);\n    } else if (aiResult.suggested_name && aiResult.suggested_slug) {\n      categoryId = 'temp_' + Date.now();\n      categoryName = aiResult.suggested_name;\n      categorySlug = aiResult.suggested_slug;\n      console.log(`[Prepare] ⚠️ TEMP category: ${categoryName}`);\n    } else {\n      categoryId = null;\n      categoryName = null;\n      categorySlug = null;\n    }\n  } catch (error) {\n    console.error('[Prepare] ERROR reading AI result:', error.message);\n    const categories = storedData.categories;\n    if (categories && categories.length > 0) {\n      const firstCat = categories[0];\n      categoryId = firstCat.id;\n      categoryName = firstCat.name;\n      categorySlug = firstCat.slug;\n      console.log(`[Prepare] ⚠️ FALLBACK: Using first category: ${categoryName} (${categoryId})`);\n    }\n  }\n}\n\nif (!categoryId || !categorySlug) {\n  console.warn('[Prepare] ⚠️ No category found, using default');\n  categoryId = null;\n  categoryName = 'Uncategorized';\n  categorySlug = 'uncategorized';\n}\n\nconst preparedData = {\n  article_id: articleId,\n  category_id: categoryId,\n  category_name: categoryName,\n  category_slug: categorySlug,\n  source_id: articleData.source_id || '',\n  source_domain: articleData.source_domain || ''\n};\n\nconsole.log('[Prepare] ✅ Output data:', JSON.stringify(preparedData, null, 2));\n\nreturn {\n  json: preparedData\n};\n"
+      },
+      "id": "e1a3b0b7-ea81-4ad5-8c0d-d943effd9b76",
+      "name": "Prepare Article Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1984,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# BẠN LÀ AI CHUYÊN GIA PHÂN LOẠI BÀI BÁO TIẾNG VIỆT\n\nNhiệm vụ của bạn: Phân tích bài báo và quyết định nó thuộc category nào TRONG DANH SÁCH CÓ SẴN, hoặc cần tạo category MỚI nếu không có category phù hợp.\n\n## DANH SÁCH CATEGORIES CÓ SẴN:\n{{ $('Store Categories in Memory').item.json.categoriesText }}\n\n## BÀI BÁO CẦN PHÂN LOẠI:\n**Tiêu đề:** {{ $('Store Categories in Memory').item.json.article.title }}\n**Tóm tắt:** {{ $('Store Categories in Memory').item.json.article.summary }}\n**Tags:** {{ $('Store Categories in Memory').item.json.article.tags.join(', ') }}\n**Content preview:** {{ $('Store Categories in Memory').item.json.article.content.substring(0, 300) }}...\n\n---\n\n## QUY TRÌNH SUY LUẬN (PHẢI TUÂN THỦ):\n\n### BƯỚC 1: Phân tích chủ đề bài báo\n- Đọc kỹ tiêu đề, tóm tắt, tags, nội dung\n- Xác định 3-5 từ khóa chính (keywords) của bài báo\n- Xác định chủ đề chính (main topic)\n\n### BƯỚC 2: So sánh với categories có sẵn\n- Lần lượt xem từng category trong danh sách\n- Với mỗi category, đánh giá độ tương đồng (similarity score 0-100):\n  * 90-100: Rất khớp (chủ đề hoàn toàn giống nhau)\n  * 70-89: Khá khớp (chủ đề có liên quan chặt chẽ)\n  * 50-69: Có thể khớp (có một số điểm chung)\n  * 0-49: Không khớp (chủ đề khác nhau)\n\n### BƯỚC 3: Quyết định\n- **NẾU có category với similarity ≥ 60:** Chọn category đó\n- **NẾU KHÔNG có category nào ≥ 60:** Tạo category mới\n\n### BƯỚC 4: Xử lý category mới (nếu cần)\nKhi tạo category mới:\n- Tên category: Ngắn gọn, rõ ràng, bằng tiếng Việt có dấu\n- Slug: Chuyển sang chữ thường, không dấu, dùng dấu gạch ngang (-)\n- Ví dụ:\n  * \"Mẹ & Bé\" → \"me-be\"\n  * \"Thời Trang\" → \"thoi-trang\"\n  * \"Công Nghệ\" → \"cong-nghe\"\n  * \"Giáo Dục\" → \"giao-duc\"\n\n---\n\n## OUTPUT FORMAT (BẮT BUỘC):\nBạn PHẢI trả lời theo đúng JSON format sau, KHÔNG được thêm text giải thích bên ngoài:\n\n```json\n{\n  \"reasoning\": {\n    \"keywords\": [\"keyword1\", \"keyword2\", \"keyword3\"],\n    \"main_topic\": \"Chủ đề chính của bài báo\",\n    \"top_matches\": [\n      {\n        \"category_name\": \"Tên category\",\n        \"category_id\": \"id\",\n        \"similarity_score\": 85,\n        \"reason\": \"Lý do khớp\"\n      }\n    ]\n  },\n  \"decision\": {\n    \"match_found\": true,\n    \"confidence\": 0.85,\n    \"category_id\": \"Wikv3OY1hHKQjTRE9gYb\",\n    \"category_name\": \"Mẹ & Bé\",\n    \"category_slug\": \"me-be\",\n    \"suggested_name\": null,\n    \"suggested_slug\": null\n  }\n}\n```\n\nHOẶC nếu cần tạo mới:\n\n```json\n{\n  \"reasoning\": {\n    \"keywords\": [\"keyword1\", \"keyword2\"],\n    \"main_topic\": \"Chủ đề mới\",\n    \"top_matches\": [],\n    \"why_create_new\": \"Không có category nào phù hợp vì...\"\n  },\n  \"decision\": {\n    \"match_found\": false,\n    \"confidence\": 0.95,\n    \"category_id\": null,\n    \"category_name\": null,\n    \"category_slug\": null,\n    \"suggested_name\": \"Tên Category Mới\",\n    \"suggested_slug\": \"ten-category-moi\"\n  }\n}\n```\n\n---\n\n## VÍ DỤ CỤ THỂ:\n\n**Ví dụ 1: Bài về thai kỳ**\n- Tiêu đề: \"Tuần thai thứ 37: Bé yêu đã đủ tháng\"\n- Keywords: [\"thai kỳ\", \"mang thai\", \"tuần thai\", \"bé yêu\"]\n- Main topic: \"Chăm sóc thai kỳ và mẹ bầu\"\n- Top match: \"Mẹ & Bé\" (similarity: 95)\n- Decision: **CHỌN \"Mẹ & Bé\"**\n\n**Ví dụ 2: Bài về công nghệ AI mới**\n- Tiêu đề: \"ChatGPT-5 ra mắt với khả năng mới\"\n- Keywords: [\"AI\", \"công nghệ\", \"ChatGPT\", \"trí tuệ nhân tạo\"]\n- Main topic: \"Công nghệ trí tuệ nhân tạo\"\n- Top match: Không có (similarity cao nhất: 45)\n- Decision: **TẠO MỚI \"Công Nghệ AI\" / \"cong-nghe-ai\"**\n\nBây giờ hãy phân tích bài báo trên và đưa ra quyết định!",
+        "options": {
+          "systemMessage": "=Bạn là AI chuyên gia phân loại nội dung. Luôn trả lời bằng JSON format. Phân tích logic từng bước trước khi quyết định."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        960,
+        -144
+      ],
+      "id": "3014e337-462d-4978-ba29-62024b99a15e",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        960,
+        80
+      ],
+      "id": "2356e15c-e87d-4631-bcef-a33db9140cfd",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "3s5sxM3ilcLR83QW",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Phân loại bài báo vào category phù hợp hoặc tạo category mới"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        80
+      ],
+      "id": "b7f650a6-4b57-4c17-b9ca-1b041da1a525",
+      "name": "structure"
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiOutput = $input.first().json.output;\n\nlet parsedOutput;\nif (typeof aiOutput === 'string') {\n  let cleanOutput = aiOutput.trim();\n  \n  if (cleanOutput.startsWith('```json')) {\n    cleanOutput = cleanOutput.replace(/^```json\\s*/, '').replace(/```\\s*$/, '');\n  } else if (cleanOutput.startsWith('```')) {\n    cleanOutput = cleanOutput.replace(/^```\\s*/, '').replace(/```\\s*$/, '');\n  }\n  \n  console.log('[Parse AI] Cleaned output:', cleanOutput);\n  parsedOutput = JSON.parse(cleanOutput);\n} else {\n  parsedOutput = aiOutput;\n}\n\nconsole.log('[Parse AI] Decision:', JSON.stringify(parsedOutput.decision, null, 2));\nconsole.log('[Parse AI] Match found:', parsedOutput.decision.match_found);\n\nreturn {\n  json: {\n    output: parsedOutput\n  }\n};"
+      },
+      "id": "d770b4fc-ed5b-44a4-906d-2175bd106d59",
+      "name": "Parse AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://7slzr34g-5000.asse.devtunnels.ms/api/scrape/n8n-callback",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"article_id\": \"{{ $json.article_id }}\",\n  \"category_id\": \"{{ $json.category_id }}\",\n  \"category_name\": \"{{ $json.category_name }}\",\n  \"category_slug\": \"{{ $json.category_slug }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2192,
+        -144
+      ],
+      "id": "d7c1013d-7d76-41ce-b644-b60bf82979a7",
+      "name": "call back to backend"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Store Categories in Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Categories in Memory": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Match Found": {
+      "main": [
+        [
+          {
+            "node": "Prepare Article Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Category": {
+      "main": [
+        [
+          {
+            "node": "Prepare Article Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Article Data": {
+      "main": [
+        [
+          {
+            "node": "call back to backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "IF Match Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "structure": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "79a62858-31a3-48e0-9582-ab1cf8d332de",
+  "meta": {
+    "instanceId": "b866e1972cc930c2fa13f0c7d5fe03045c6e5a2a626aaae9100f632f83c8c37e"
+  },
+  "id": "FCWrzw0rrNWFkRTM",
+  "tags": []
+}
