@@ -1,0 +1,486 @@
+{
+  "name": "AI News Recommendation System",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "recommend",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        96,
+        464
+      ],
+      "id": "2a30c5b1-8f22-4be9-a587-ed6251eb7488",
+      "name": "Webhook",
+      "webhookId": "recommend-news"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "projectId": "news-scraper-60c9c",
+        "collection": "=news/articles/{{$json.body.category || $json.query.category}}",
+        "documentId": "={{$json.body.id || $json.query.id}}",
+        "simple": false
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        464
+      ],
+      "id": "f462fa01-0b13-4bbc-afab-fd7f5c58496b",
+      "name": "Get Current News",
+      "credentials": {
+        "googleApi": {
+          "id": "ULaBGlBvQvBocGOa",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "getAll",
+        "projectId": "raovat-1d23e",
+        "collection": "JobsRaoVat",
+        "returnAll": true,
+        "simple": false
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        368
+      ],
+      "id": "fc5f6a48-0b04-47bf-984f-23c45567a564",
+      "name": "Get RaoVat",
+      "credentials": {
+        "googleApi": {
+          "id": "O702Jvi1OMe37hhU",
+          "name": "Google Firebase Cloud Firestore account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "getAll",
+        "projectId": "business-a0091",
+        "collection": "businessJobs",
+        "returnAll": true,
+        "simple": false
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        560
+      ],
+      "id": "ebc8bd80-3277-4ffb-a803-d79a1da07f79",
+      "name": "Get Business",
+      "credentials": {
+        "googleApi": {
+          "id": "ptYYTKWmHnPLHusu",
+          "name": "Google Firebase Cloud Firestore account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        768,
+        464
+      ],
+      "id": "2fc239a4-3e88-44bd-a8b9-806840bd4b89",
+      "name": "Merge Candidates"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get current news from first input\nconst currentNews = $('Get Current News').first().json;\n\n// Get candidates from merge\nconst raovatItems = $('Get RaoVat').all();\nconst businessItems = $('Get Business').all();\n\n// Create lightweight candidates - ONLY essential fields\nconst candidates = [];\n\n// Process RaoVat items\nfor (const item of raovatItems) {\n  const data = item.json;\n  candidates.push({\n    id: data.external_source?.id || data.id || '',\n    source: 'RaoVat',\n    title: data.title || '',\n    description: (data.description || '').substring(0, 250),\n    category: data.category || ''\n  });\n}\n\n// Process Business items\nfor (const item of businessItems) {\n  const data = item.json;\n  candidates.push({\n    id: data.place_id || data.cid || data.id || '',\n    source: 'Business',\n    title: data.name || '',\n    description: (data.description || '').substring(0, 250),\n    category: data.attributes?.category || data.category || '',\n    tags: (data.tags || []).slice(0, 5).join(', ')\n  });\n}\n\n// Prepare data for AI\nconst preparedData = {\n  currentNews: {\n    title: currentNews.title,\n    summary: currentNews.summary || (currentNews.content || '').substring(0, 300),\n    category: currentNews.category_name || currentNews.category,\n    tags: (currentNews.tags || []).join(', ')\n  },\n  candidates: candidates,\n  totalCandidates: candidates.length\n};\n\nreturn [{ json: preparedData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        464
+      ],
+      "id": "0177beba-75d8-45ab-a026-4a19cd0f7e51",
+      "name": "Prepare Lightweight Data"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1288,
+        688
+      ],
+      "id": "9d36c27c-5fbf-46aa-a8f1-9f1845a6e577",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "3s5sxM3ilcLR83QW",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a content recommendation expert.\n\nYour task:\n1. Analyze the CURRENT NEWS below\n2. Compare it semantically with ALL CANDIDATES\n3. Find the TOP 2 most relevant/similar candidates\n4. Consider: topic similarity, category match, keyword overlap, semantic meaning\n\nCURRENT NEWS:\nTitle: {{ $json.currentNews.title }}\nCategory: {{ $json.currentNews.category }}\nSummary: {{ $json.currentNews.summary }}\nTags: {{ $json.currentNews.tags }}\n\n---\n\nCANDIDATES TO COMPARE:\n{{ JSON.stringify($json.candidates, null, 2) }}\n\n---\n\nIMPORTANT:\n- Return EXACTLY 2 recommendations (one from each source if possible)\n- Output ONLY valid JSON, no explanations\n- Use this exact format:\n\n{\n  \"recommendations\": [\n    {\"id\": \"exact_id_from_candidates\", \"source\": \"RaoVat\"},\n    {\"id\": \"exact_id_from_candidates\", \"source\": \"Business\"}\n  ]\n}\n\nSelect the TOP 2 most relevant candidates now:",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a JSON-only assistant. Always return valid JSON with no additional text."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1216,
+        464
+      ],
+      "id": "3e0a1518-cccd-4a95-821a-77f9d88564cd",
+      "name": "AI Agent Recommend"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response and extract IDs\nconst aiOutput = $input.first().json.output || $input.first().json.text || '';\n\nlet recommendations = [];\n\ntry {\n  // Try to parse as JSON\n  let parsed;\n  \n  // Check if output is already an object\n  if (typeof aiOutput === 'object') {\n    parsed = aiOutput;\n  } else {\n    // Try to extract JSON from text\n    const jsonMatch = aiOutput.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = JSON.parse(aiOutput);\n    }\n  }\n  \n  recommendations = parsed.recommendations || [];\n  \n} catch (e) {\n  // Fallback: regex extraction\n  const idPattern = /\"id\"\\s*:\\s*\"([^\"]+)\"/g;\n  const sourcePattern = /\"source\"\\s*:\\s*\"([^\"]+)\"/g;\n  \n  const ids = [];\n  const sources = [];\n  \n  let match;\n  while ((match = idPattern.exec(aiOutput)) !== null) {\n    ids.push(match[1]);\n  }\n  \n  while ((match = sourcePattern.exec(aiOutput)) !== null) {\n    sources.push(match[1]);\n  }\n  \n  recommendations = ids.slice(0, 2).map((id, idx) => ({\n    id: id,\n    source: sources[idx] || 'RaoVat'\n  }));\n}\n\n// Ensure we have exactly 2 recommendations\nrecommendations = recommendations.slice(0, 2);\n\n// Split by source\nconst raovatIds = recommendations.filter(r => r.source === 'RaoVat').map(r => r.id);\nconst businessIds = recommendations.filter(r => r.source === 'Business').map(r => r.id);\n\nreturn [{\n  json: {\n    recommendations: recommendations,\n    raovatIds: raovatIds,\n    businessIds: businessIds,\n    hasRaoVat: raovatIds.length > 0,\n    hasBusiness: businessIds.length > 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        464
+      ],
+      "id": "ba9fefeb-f94d-482d-922b-124bb0099882",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.hasRaoVat }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        368
+      ],
+      "id": "88275b05-37e5-457f-bfa7-27833036fefc",
+      "name": "Has RaoVat?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.hasBusiness }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        560
+      ],
+      "id": "1552665b-4282-43f8-8b65-dd0da4594ee5",
+      "name": "Has Business?"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "projectId": "raovat-1d23e",
+        "collection": "JobsRaoVat",
+        "documentId": "={{ $('Parse AI Response').first().json.raovatIds[0] }}"
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        2016,
+        368
+      ],
+      "id": "3e081f0b-87a0-4402-ab4c-64c542353167",
+      "name": "Get RaoVat by ID",
+      "credentials": {
+        "googleApi": {
+          "id": "O702Jvi1OMe37hhU",
+          "name": "Google Firebase Cloud Firestore account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "projectId": "business-a0091",
+        "collection": "businessJobs",
+        "documentId": "={{ $('Parse AI Response').first().json.businessIds[0] }}"
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        2016,
+        560
+      ],
+      "id": "fa378ae8-953c-4501-a7a8-105cd862837a",
+      "name": "Get Business by ID",
+      "credentials": {
+        "googleApi": {
+          "id": "ptYYTKWmHnPLHusu",
+          "name": "Google Firebase Cloud Firestore account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2240,
+        464
+      ],
+      "id": "b3e3d2ad-7b67-4390-83e8-391deb8a42e3",
+      "name": "Merge Results"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all results\nconst results = $input.all();\nconst recommendations = $('Parse AI Response').first().json.recommendations;\n\n// Format final response\nconst finalData = results.map(item => {\n  const data = item.json;\n  const matchInfo = recommendations.find(r => \n    r.id === (data.id || data.place_id || data.cid || data.external_source?.id)\n  );\n  \n  return {\n    ...data,\n    recommendationSource: matchInfo?.source || 'Unknown',\n    matchRank: recommendations.indexOf(matchInfo) + 1\n  };\n});\n\nreturn [{\n  json: {\n    success: true,\n    newsId: $('Get Current News').first().json.id,\n    count: finalData.length,\n    recommendations: finalData\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        464
+      ],
+      "id": "af9a2183-9e41-4f53-a726-0c112361b55b",
+      "name": "Format Final Response1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2688,
+        464
+      ],
+      "id": "e4537840-41ce-4a49-ae03-bc4feac165ca",
+      "name": "Respond to Webhook1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Current News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current News": {
+      "main": [
+        [
+          {
+            "node": "Get Business",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get RaoVat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RaoVat": {
+      "main": [
+        [
+          {
+            "node": "Merge Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business": {
+      "main": [
+        [
+          {
+            "node": "Merge Candidates",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Candidates": {
+      "main": [
+        [
+          {
+            "node": "Prepare Lightweight Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Lightweight Data": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Recommend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Recommend",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Recommend": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Has RaoVat?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Business?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has RaoVat?": {
+      "main": [
+        [
+          {
+            "node": "Get RaoVat by ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Business?": {
+      "main": [
+        [
+          {
+            "node": "Get Business by ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RaoVat by ID": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business by ID": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Response1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b1828a2a-a567-4c07-aec2-16562271a63e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b866e1972cc930c2fa13f0c7d5fe03045c6e5a2a626aaae9100f632f83c8c37e"
+  },
+  "id": "HPlNz0NDtGDQXHY2",
+  "tags": []
+}
